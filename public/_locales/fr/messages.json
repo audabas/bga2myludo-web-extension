@@ -307,5 +307,44 @@
     },
     "registrationStatusErrorTooltip": {
         "message": "Impossible de vérifier si cette partie est enregistrée : Myludo n'a pas répondu comme prévu"
+    },
+    "bulkRegistrationButtonText": {
+        "message": "Enregistrer toutes les Tables sur Myludo"
+    },
+    "bulkRegistrationMissingOptionsText": {
+        "message": "Pour enregistrer toutes les Tables d'un coup, activez dans l'extension : #OPTIONS#."
+    },
+    "bulkRegistrationOptionsSeparator": {
+        "message": " et "
+    },
+    "bulkRegistrationAnalysingText": {
+        "message": "Analyse de l'historique en cours, rien n'est enregistré sur Myludo. Tables lues : #COUNT#"
+    },
+    "bulkRegistrationAnalysisText": {
+        "message": "À enregistrer : #TO_REGISTER# · Écartées : #DISCARDED# · Déjà enregistrées : #REGISTERED#"
+    },
+    "bulkRegistrationDiscardedUndeterminedText": {
+        "message": "statut indéterminé : #COUNT#"
+    },
+    "bulkRegistrationDiscardedAbandonedText": {
+        "message": "abandonnées : #COUNT#"
+    },
+    "bulkRegistrationDiscardedGameUnavailableText": {
+        "message": "jeu indisponible sur Myludo : #COUNT#"
+    },
+    "bulkRegistrationPageCapText": {
+        "message": "Historique trop long : seules les #COUNT# Tables les plus récentes ont été analysées. Restreignez la période ou le jeu avec les filtres de la page."
+    },
+    "bulkRegistrationFeedErrorText": {
+        "message": "BGA n'a pas répondu comme prévu : l'analyse est incomplète. Réessayez plus tard."
+    },
+    "bulkRegistrationNotConnectedText": {
+        "message": "Connectez-vous à Myludo pour vérifier quelles Tables sont déjà enregistrées, puis relancez l'analyse."
+    },
+    "bulkRegistrationPermissionMissingText": {
+        "message": "Autorisez l'extension à accéder à myludo.fr depuis sa fenêtre, puis relancez l'analyse."
+    },
+    "bulkRegistrationAnalysisErrorText": {
+        "message": "L'analyse a échoué. Réessayez plus tard."
     }
 }

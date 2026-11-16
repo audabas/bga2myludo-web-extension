@@ -1,7 +1,10 @@
+import type { BulkRegistrationModule } from "~/core/bulkRegistration/types";
 import boardGameArenaHelper from "~/core/helpers/boardGameArenaHelper";
+import bulkRegistrationDisplayHelper from "~/core/helpers/bulkRegistrationDisplayHelper";
 import registrationStatusDisplayHelper from "~/core/helpers/registrationStatusDisplayHelper";
 import { createInvalidatedTables } from "~/core/registrationStatus/invalidatedTables";
 import type { RegistrationStatuses } from "~/core/registrationStatus/types";
+import bulkRegistrationService from "~/core/services/bulkRegistrationService";
 import gameStatsService from "~/core/services/gameStatsService";
 import lastResultsService from "~/core/services/lastResultsService";
 import registrationStatusService from "~/core/services/registrationStatusService";
@@ -96,7 +99,64 @@ export default defineContentScript({
             return new URLSearchParams(window.location.search).get("id");
         }
 
+        // panneau de l'Enregistrement groupé : URL pour laquelle il a été préparé (panneau null : pas de bouton)
+        let bulkPanel: { href: string; panel: HTMLElement | null } | null = null;
+        let bulkPanelPending = false;
+
+        /** Injecte (une fois par URL) le panneau de l'Enregistrement groupé au-dessus de la liste des Tables. */
+        async function injectGameStatsBulkRegistration() {
+            if (bulkPanelPending) return;
+
+            const href = window.location.href;
+            if (bulkPanel && bulkPanel.href === href && (bulkPanel.panel === null || bulkPanel.panel.isConnected)) return;
+
+            const list = document.getElementById("gamelist_inner");
+            const anchor = list?.closest("table") ?? list;
+            if (!anchor?.parentElement) return;
+
+            bulkPanelPending = true;
+            try {
+                bulkPanel?.panel?.remove();
+                const { availability, module } = await bulkRegistrationService.forGameStats();
+                const panel = bulkRegistrationDisplayHelper.createPanel(availability, () => {
+                    if (module && panel) analyseForBulkRegistration(panel, module);
+                });
+                if (panel && !anchor.isConnected) {
+                    // la liste a été redessinée pendant la préparation : on réessaie au prochain passage
+                    bulkPanel = null;
+                    return;
+                }
+                if (panel) anchor.parentElement?.insertBefore(panel, anchor);
+                bulkPanel = { href, panel };
+            } catch (error) {
+                console.error("Error preparing Myludo bulk registration:", error);
+                bulkPanel = { href, panel: null };
+            } finally {
+                bulkPanelPending = false;
+            }
+        }
+
+        /** Analyse de l'Enregistrement groupé : rien n'est écrit sur Myludo, le résultat s'affiche dans le panneau. */
+        async function analyseForBulkRegistration(panel: HTMLElement, module: BulkRegistrationModule) {
+            bulkRegistrationDisplayHelper.setBusy(panel, true);
+            bulkRegistrationDisplayHelper.showAnalysing(panel, 0);
+            try {
+                const analysis = await module.analyse(progress => bulkRegistrationDisplayHelper.showAnalysing(panel, progress.tablesRead));
+                bulkRegistrationDisplayHelper.showAnalysis(panel, analysis);
+            } catch (error) {
+                console.error("Error analysing BGA history for Myludo bulk registration:", error);
+                bulkRegistrationDisplayHelper.showError(panel);
+            } finally {
+                bulkRegistrationDisplayHelper.setBusy(panel, false);
+            }
+        }
+
         async function patch() {
+            // l'Enregistrement groupé dépend du statut Myludo ; le panneau n'est pas un lien Myludo de ligne
+            if (showRegistrationStatus && window.top === window && regexpGameStatsPage.test(window.location.href)) {
+                injectGameStatsBulkRegistration();
+            }
+
             if (document.getElementsByClassName(myLudoEltId).length === 0) {
                 if (regexTablePage.test(window.location.href)) {
                     await patchTablePage();

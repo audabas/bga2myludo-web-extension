@@ -207,8 +207,8 @@ export function createBulkRegistration(deps: BulkRegistrationDependencies): Bulk
 
     /**
      * Invalide le statut de la Table et ouvre son formulaire, puis attend que son statut sans cache dise « enregistrée »
-     * (au plus 30 s). Le statut sans cache n'est pas mis en cache : une fois la Table enregistrée, un dernier calcul
-     * avec cache l'y écrit, comme pour l'affichage. Une Table en échec reste hors du cache.
+     * (au plus 30 s). Le calcul sans cache qui la trouve enregistrée met ce statut en cache, sans autre appel Myludo ;
+     * une Table en échec reste hors du cache (son statut a été invalidé) : l'affichage la revérifiera.
      * Une demande d'arrêt écourte l'attente : le statut est alors vérifié une dernière fois, tout de suite.
      * Compte Myludo non connecté (ou permission manquante) : la Table compte en échec et le parcours s'arrête aussitôt.
      */
@@ -224,11 +224,8 @@ export function createBulkRegistration(deps: BulkRegistrationDependencies): Bulk
         const deadline = deps.clock.now().getTime() + FORM_TIMEOUT_MS;
         while (deps.clock.now().getTime() < deadline) {
             await run.wait(Math.min(STATUS_POLL_INTERVAL_MS, deadline - deps.clock.now().getTime()));
-            const status = (await deps.statuses.getStatuses([table], { useCache: false })).get(table.tableId);
-            if (status?.kind === "registered") {
-                await deps.statuses.getStatuses([table]);
-                return true;
-            }
+            const status = (await deps.statuses.getStatuses([table], { useCache: false, cacheRegistered: true })).get(table.tableId);
+            if (status?.kind === "registered") return true;
             // le compte Myludo ne peut plus être interrogé : continuer accumulerait des échecs
             if (status?.kind === "undetermined" && status.reason === "notConnected") run.requestStop("myludoNotConnected");
             if (status?.kind === "undetermined" && status.reason === "permissionMissing") run.requestStop("myludoPermissionMissing");

@@ -171,10 +171,12 @@ export function createRegistrationStatus(deps: RegistrationStatusDependencies): 
                 await computeGroup(group, configuration, getDetails, statuses);
             }
 
-            // le mode « sans cache » n'écrit pas non plus : il ne doit pas masquer une invalidation en cours
-            if (useCache) {
-                await cache.write(missing.map(item => ({ tableId: item.table.tableId, status: statuses.get(item.table.tableId)!, context: context(item) })));
-            }
+            // le mode « sans cache » n'écrit pas non plus : il ne doit pas masquer une invalidation en cours,
+            // sauf, sur demande, une Table trouvée enregistrée (formulaire validé : il n'y a plus rien à revérifier)
+            const toWrite = useCache
+                ? missing
+                : options.cacheRegistered ? missing.filter(({ table }) => statuses.get(table.tableId)?.kind === "registered") : [];
+            await cache.write(toWrite.map(item => ({ tableId: item.table.tableId, status: statuses.get(item.table.tableId)!, context: context(item) })));
 
             return statuses;
         },

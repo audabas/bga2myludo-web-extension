@@ -46,6 +46,11 @@ export type RegistrationStatuses = Map<string, RegistrationStatus>;
 export interface GetStatusesOptions {
     /** false : mode « sans cache » (formulaire Myludo), Myludo est toujours interrogé. Vrai par défaut. */
     useCache?: boolean;
+    /**
+     * Mode « sans cache » seulement : une Table trouvée enregistrée est tout de même mise en cache (Enregistrement
+     * groupé, une fois le formulaire validé). Les autres statuts ne le sont pas : une invalidation en cours reste.
+     */
+    cacheRegistered?: boolean;
 }
 
 // ---------------------------------------------------------------------------

@@ -22,6 +22,11 @@ const DISCARD_LABELS: Record<DiscardReason, string> = {
     gameUnavailable: "bulkRegistrationDiscardedGameUnavailableText"
 };
 
+const ACCOUNT_ISSUE_LABELS: Record<NonNullable<BulkAnalysis["myludoAccountIssue"]>, string> = {
+    notConnected: "bulkRegistrationNotConnectedText",
+    permissionMissing: "bulkRegistrationPermissionMissingText"
+};
+
 const STOP_REASON_LABELS: Record<StopReason, string> = {
     requested: "bulkRegistrationStopRequestedText",
     windowClosed: "bulkRegistrationStopWindowClosedText",
@@ -141,18 +146,27 @@ export default class bulkRegistrationDisplayHelper {
             : `${Object.values(discarded).reduce((sum, ids) => sum + ids.length, 0)} (${reasons.join(", ")})`;
     }
 
-    /** Résultat de l'analyse ; `pageCapTextKey` est le libellé du plafond atteint, propre à la page (filtres ou non). */
-    static showAnalysis(panel: HTMLElement, analysis: BulkAnalysis, pageCapTextKey = "bulkRegistrationPageCapText") {
+    /**
+     * Résultat de l'analyse ; `pageCapTextKey` est le libellé du plafond atteint, propre à la page (filtres ou non).
+     * Une analyse interrompue (compte Myludo inutilisable, erreur BGA) n'affiche que l'invitation à se connecter
+     * ou à relancer l'analyse : ses décomptes, partiels, ne veulent rien dire.
+     */
+    static showAnalysis(panel: HTMLElement, analysis: BulkAnalysis, pageCapTextKey: string) {
+        if (analysis.myludoAccountIssue) {
+            bulkRegistrationDisplayHelper.showText(panel, message(ACCOUNT_ISSUE_LABELS[analysis.myludoAccountIssue]));
+            return;
+        }
+        if (analysis.feedEnd === "error") {
+            bulkRegistrationDisplayHelper.showText(panel, message("bulkRegistrationFeedErrorText"));
+            return;
+        }
+
         const lines = [message("bulkRegistrationAnalysisText", {
             TO_REGISTER: analysis.toRegister.length,
             DISCARDED: bulkRegistrationDisplayHelper.discardedText(analysis.discarded),
             REGISTERED: analysis.alreadyRegistered.length
         })];
-
-        if (analysis.myludoAccountIssue === "notConnected") lines.push(message("bulkRegistrationNotConnectedText"));
-        if (analysis.myludoAccountIssue === "permissionMissing") lines.push(message("bulkRegistrationPermissionMissingText"));
         if (analysis.feedEnd === "pageCap") lines.push(message(pageCapTextKey, { COUNT: analysis.tablesRead }));
-        if (analysis.feedEnd === "error") lines.push(message("bulkRegistrationFeedErrorText"));
 
         bulkRegistrationDisplayHelper.showText(panel, lines.join("\n"));
     }

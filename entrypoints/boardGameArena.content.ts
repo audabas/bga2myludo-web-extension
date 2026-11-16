@@ -1,3 +1,4 @@
+import { isReadyToRegister } from "~/core/bulkRegistration/bulkRegistration";
 import type { BulkAnalysis, BulkRegistrationModule } from "~/core/bulkRegistration/types";
 import boardGameArenaHelper from "~/core/helpers/boardGameArenaHelper";
 import bulkRegistrationDisplayHelper from "~/core/helpers/bulkRegistrationDisplayHelper";
@@ -197,7 +198,7 @@ export default defineContentScript({
             try {
                 const analysis = await module.analyse(progress => bulkRegistrationDisplayHelper.showAnalysing(panel, progress.tablesRead));
                 bulkRegistrationDisplayHelper.showAnalysis(panel, analysis, page.pageCapTextKey);
-                if (analysis.toRegister.length > 0) {
+                if (isReadyToRegister(analysis)) {
                     bulkRegistrationDisplayHelper.showConfirmation(panel, analysis.toRegister.length, () => {
                         registerForBulkRegistration(panel, module, analysis, page);
                     });

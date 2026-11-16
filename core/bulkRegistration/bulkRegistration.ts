@@ -83,6 +83,15 @@ export function bulkRegistrationAvailability(
 }
 
 /**
+ * L'analyse permet-elle de proposer l'enregistrement ? Il faut des Tables à enregistrer, un fil lu sans erreur BGA
+ * (sinon l'analyse est incomplète : on invite à la relancer) et un compte Myludo utilisable (sinon on invite à s'y
+ * connecter). Un fil coupé au plafond de pages n'empêche pas l'enregistrement : la page le signale.
+ */
+export function isReadyToRegister(analysis: BulkAnalysis): boolean {
+    return analysis.toRegister.length > 0 && analysis.feedEnd !== "error" && !analysis.myludoAccountIssue;
+}
+
+/**
  * Module Enregistrement groupé : enregistre sur Myludo toutes les Tables non enregistrées d'un Historique BGA.
  * Il ne connaît pas le DOM ; fil d'historique, Statut d'enregistrement, horloge et pilote de formulaire sont injectés.
  * Il ne mémorise rien entre deux lancements : relancer refait l'analyse, qui exclut les Tables enregistrées.
@@ -116,7 +125,8 @@ export function createBulkRegistration(deps: BulkRegistrationDependencies): Bulk
                 analysis.tablesRead += tables.length;
                 onProgress?.({ tablesRead: analysis.tablesRead });
 
-                if (page.isLast) return analysis;
+                // compte Myludo inutilisable : aucune autre Table ne pourrait être vérifiée, inutile de lire la suite
+                if (page.isLast || analysis.myludoAccountIssue) return analysis;
             }
 
             analysis.feedEnd = "pageCap";

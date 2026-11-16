@@ -339,7 +339,7 @@
         "message": "Historique trop long : seules les #COUNT# Tables les plus récentes ont été analysées. Pour les plus anciennes, utilisez « Statistiques de jeu », dont les filtres restreignent la période ou le jeu."
     },
     "bulkRegistrationFeedErrorText": {
-        "message": "BGA n'a pas répondu comme prévu : l'analyse est incomplète. Réessayez plus tard."
+        "message": "BGA n'a pas répondu comme prévu : l'analyse est incomplète, rien n'a été enregistré sur Myludo. Relancez l'analyse dans quelques instants."
     },
     "bulkRegistrationNotConnectedText": {
         "message": "Connectez-vous à Myludo pour vérifier quelles Tables sont déjà enregistrées, puis relancez l'analyse."

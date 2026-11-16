@@ -97,7 +97,8 @@ export interface BulkAnalysis {
     feedEnd: FeedEnd;
     /**
      * Raison commune à tout le compte Myludo (non connecté, permission manquante) quand des Tables sont indéterminées
-     * pour cette raison : la page peut inviter à se connecter plutôt que d'annoncer des Tables écartées.
+     * pour cette raison : l'analyse s'arrête dès qu'elle la constate (aucune autre Table ne pourrait être vérifiée),
+     * et la page invite à se connecter plutôt que d'annoncer des Tables écartées.
      */
     myludoAccountIssue?: "notConnected" | "permissionMissing";
 }
@@ -143,7 +144,10 @@ export interface BulkRecap {
 }
 
 export interface BulkRegistrationModule {
-    /** Lit tout le fil d'historique (sous le plafond de pages), calcule les Statuts d'enregistrement et classe les Tables. */
+    /**
+     * Lit tout le fil de l'Historique BGA (sous le plafond de pages), calcule les Statuts d'enregistrement et classe
+     * les Tables. S'arrête plus tôt sur une erreur BGA ou un compte Myludo inutilisable.
+     */
     analyse(onProgress?: (progress: AnalysisProgress) => void): Promise<BulkAnalysis>;
     /**
      * Enregistre les Tables à enregistrer de l'analyse, des plus récentes aux plus anciennes, une à la fois,

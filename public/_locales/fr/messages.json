@@ -346,5 +346,26 @@
     },
     "bulkRegistrationAnalysisErrorText": {
         "message": "L'analyse a échoué. Réessayez plus tard."
+    },
+    "bulkRegistrationConfirmText": {
+        "message": "Enregistrer #COUNT# Tables sur Myludo ? Une fenêtre Myludo va s'ouvrir : chaque formulaire y sera prérempli et validé, une Table après l'autre, des plus récentes aux plus anciennes. Laissez cette fenêtre ouverte et visible jusqu'à la fin."
+    },
+    "bulkRegistrationConfirmButtonText": {
+        "message": "Lancer l'enregistrement"
+    },
+    "bulkRegistrationCancelButtonText": {
+        "message": "Annuler"
+    },
+    "bulkRegistrationProgressText": {
+        "message": "Enregistrement sur Myludo : #RANK# / #TOTAL# (Table ##TABLE_ID#). Laissez la fenêtre Myludo ouverte et visible."
+    },
+    "bulkRegistrationRecapText": {
+        "message": "Enregistrement terminé. Enregistrées : #REGISTERED# · Échecs : #FAILED# · Écartées : #DISCARDED#"
+    },
+    "bulkRegistrationFailedTablesText": {
+        "message": "Tables en échec, à reprendre une par une :"
+    },
+    "bulkRegistrationRegistrationErrorText": {
+        "message": "L'enregistrement s'est interrompu sur une erreur. Relancez l'analyse pour reprendre les Tables restantes."
     }
 }

@@ -25,11 +25,27 @@ export interface BulkClock {
     sleep(ms: number): Promise<void>;
 }
 
+/**
+ * Pilote de formulaire : une fenêtre Myludo dédiée, avec un seul onglet réutilisé, pour tout un parcours.
+ * La fenêtre est créée au premier formulaire et fermée par `close`.
+ */
+export interface BulkFormDriver {
+    /**
+     * Ouvre, avec un rechargement complet de la page, le formulaire Myludo de la Table (URL du lien unitaire) :
+     * la validation automatique du script Myludo fait le reste. Rejeté si le formulaire n'a pas pu être ouvert.
+     */
+    open(table: RegistrationTable): Promise<void>;
+    /** Ferme la fenêtre dédiée (fin du parcours). */
+    close(): Promise<void>;
+}
+
 export interface BulkRegistrationDependencies {
     /** Ouvre le fil d'historique, lu depuis le début (un nouveau fil à chaque lancement). */
     openFeed(): BulkHistoryFeed;
     statuses: BulkRegistrationStatusAccess;
     clock: BulkClock;
+    /** Ouvre un pilote de formulaire (une fenêtre dédiée) pour un parcours d'enregistrement. */
+    openFormDriver(): BulkFormDriver;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +100,39 @@ export interface BulkAnalysis {
     myludoAccountIssue?: "notConnected" | "permissionMissing";
 }
 
+// ---------------------------------------------------------------------------
+// Enregistrement
+// ---------------------------------------------------------------------------
+
+/**
+ * Avancement de l'enregistrement : émis au début de chaque Table (sans `outcome`), puis à son issue.
+ * `rank` va de 1 à `total`.
+ */
+export interface RegistrationProgress {
+    table: RegistrationTable;
+    rank: number;
+    total: number;
+    outcome?: "registered" | "failed";
+}
+
+/** Récapitulatif final d'un parcours d'enregistrement. */
+export interface BulkRecap {
+    /** numéros des Tables enregistrées pendant le parcours */
+    registered: string[];
+    /** Tables dont le formulaire n'a pas abouti (pour proposer leur lien unitaire) */
+    failed: RegistrationTable[];
+    /** numéros des Tables écartées par l'analyse, par raison */
+    discarded: Record<DiscardReason, string[]>;
+    /** numéros des Tables déjà enregistrées avant le parcours */
+    alreadyRegistered: string[];
+}
+
 export interface BulkRegistrationModule {
     /** Lit tout le fil d'historique (sous le plafond de pages), calcule les Statuts d'enregistrement et classe les Tables. */
     analyse(onProgress?: (progress: AnalysisProgress) => void): Promise<BulkAnalysis>;
+    /**
+     * Enregistre les Tables à enregistrer de l'analyse, des plus récentes aux plus anciennes, une à la fois,
+     * dans une fenêtre Myludo dédiée fermée à la fin.
+     */
+    register(analysis: BulkAnalysis, onProgress?: (progress: RegistrationProgress) => void): Promise<BulkRecap>;
 }

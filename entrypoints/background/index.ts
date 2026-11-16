@@ -2,6 +2,8 @@ import { BackgroundMessages } from "~/core/models/backgroundMessages";
 import type { BackgroundRequest } from "~/core/messaging/sendToBackground";
 import boardGameArenaRepository from "~/core/repositories/boardGameArenaRepository";
 import notificationsService from "~/core/services/notificationsService";
+import { handleBulkRegistrationPort } from "./bulkRegistrationWindow";
+import canOpenWindows from "./messages/canOpenWindows";
 import getBgaBoard from "./messages/getBgaBoard";
 import getBgaFriends from "./messages/getBgaFriends";
 import getBgaGames from "./messages/getBgaGames";
@@ -15,6 +17,7 @@ import getMyludoUser from "./messages/getMyludoUser";
 type Handler = (body: any) => Promise<unknown>;
 
 const handlers: Record<string, Handler> = {
+    [BackgroundMessages.CAN_OPEN_WINDOWS]: () => canOpenWindows(),
     [BackgroundMessages.GET_BGA_BOARD]: (body) => getBgaBoard(body.query),
     [BackgroundMessages.GET_BGA_FRIENDS]: () => getBgaFriends(),
     [BackgroundMessages.GET_BGA_GAMES]: (body) => getBgaGames(body.query),
@@ -36,6 +39,9 @@ export default defineBackground(() => {
 
         return true; // keep the message channel open for the async response
     });
+
+    // Enregistrement groupé : fenêtre Myludo dédiée, pilotée depuis la page BGA par une connexion durable
+    chrome.runtime.onConnect.addListener(handleBulkRegistrationPort);
 
     chrome.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
         const manifestData = chrome.runtime.getManifest();

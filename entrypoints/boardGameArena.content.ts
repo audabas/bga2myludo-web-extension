@@ -1,4 +1,4 @@
-import type { BulkRegistrationModule } from "~/core/bulkRegistration/types";
+import type { BulkAnalysis, BulkRegistrationModule } from "~/core/bulkRegistration/types";
 import boardGameArenaHelper from "~/core/helpers/boardGameArenaHelper";
 import bulkRegistrationDisplayHelper from "~/core/helpers/bulkRegistrationDisplayHelper";
 import registrationStatusDisplayHelper from "~/core/helpers/registrationStatusDisplayHelper";
@@ -136,16 +136,50 @@ export default defineContentScript({
             }
         }
 
-        /** Analyse de l'Enregistrement groupé : rien n'est écrit sur Myludo, le résultat s'affiche dans le panneau. */
+        /**
+         * Analyse de l'Enregistrement groupé : rien n'est écrit sur Myludo, le résultat s'affiche dans le panneau.
+         * S'il y a des Tables à enregistrer, l'enregistrement est proposé, à confirmer dans la page.
+         */
         async function analyseForBulkRegistration(panel: HTMLElement, module: BulkRegistrationModule) {
             bulkRegistrationDisplayHelper.setBusy(panel, true);
             bulkRegistrationDisplayHelper.showAnalysing(panel, 0);
             try {
                 const analysis = await module.analyse(progress => bulkRegistrationDisplayHelper.showAnalysing(panel, progress.tablesRead));
                 bulkRegistrationDisplayHelper.showAnalysis(panel, analysis);
+                if (analysis.toRegister.length > 0) {
+                    bulkRegistrationDisplayHelper.showConfirmation(panel, analysis.toRegister.length, () => {
+                        registerForBulkRegistration(panel, module, analysis);
+                    });
+                }
             } catch (error) {
                 console.error("Error analysing BGA history for Myludo bulk registration:", error);
                 bulkRegistrationDisplayHelper.showError(panel);
+            } finally {
+                bulkRegistrationDisplayHelper.setBusy(panel, false);
+            }
+        }
+
+        /**
+         * Enregistrement des Tables analysées, une à une dans la fenêtre Myludo dédiée : progression dans le panneau,
+         * lignes affichées passées à « Enregistrée sur Myludo » au fil de l'eau, puis récapitulatif.
+         */
+        async function registerForBulkRegistration(panel: HTMLElement, module: BulkRegistrationModule, analysis: BulkAnalysis) {
+            bulkRegistrationDisplayHelper.setBusy(panel, true);
+            try {
+                const recap = await module.register(analysis, progress => {
+                    bulkRegistrationDisplayHelper.showProgress(panel, progress);
+                    if (progress.outcome === "registered") {
+                        registrationStatusDisplayHelper.apply(new Map([[progress.table.tableId, { kind: "registered" }]]));
+                    }
+                });
+                const failedLinks = await Promise.all(recap.failed.map(async table => ({
+                    tableId: table.tableId,
+                    url: await boardGameArenaHelper.myludoFormUrl(table.bgaGameId, table.tableId).catch(() => null)
+                })));
+                bulkRegistrationDisplayHelper.showRecap(panel, recap, failedLinks);
+            } catch (error) {
+                console.error("Error during Myludo bulk registration:", error);
+                bulkRegistrationDisplayHelper.showRegistrationError(panel);
             } finally {
                 bulkRegistrationDisplayHelper.setBusy(panel, false);
             }

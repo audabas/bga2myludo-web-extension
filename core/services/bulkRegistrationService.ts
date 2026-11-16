@@ -1,8 +1,11 @@
 import { bulkRegistrationAvailability, createBulkRegistration } from "~/core/bulkRegistration/bulkRegistration";
 import type { BulkClock, BulkHistoryFeed, BulkRegistrationAvailability, BulkRegistrationModule } from "~/core/bulkRegistration/types";
+import { sendToBackground } from "~/core/messaging/sendToBackground";
+import { BackgroundMessages } from "~/core/models/backgroundMessages";
 import type { User } from "~/core/models/user";
 import type { RegistrationTable } from "~/core/registrationStatus/types";
 import boardGameArenaService from "./boardGameArenaService";
+import { openPortFormDriver } from "./bulkRegistrationFormDriver";
 import configurationService from "./configurationService";
 import gameStatsService from "./gameStatsService";
 import type { HistoryFeed } from "./historySource";
@@ -29,6 +32,17 @@ function normalizedFeed<TEntry>(
     };
 }
 
+/** Le script de fond sait-il ouvrir la fenêtre Myludo dédiée ? (pas de fenêtres sur Firefox Android) */
+async function canOpenWindows(): Promise<boolean> {
+    try {
+        const response = await sendToBackground<boolean>({ name: BackgroundMessages.CAN_OPEN_WINDOWS });
+        return response?.message === true;
+    } catch (error) {
+        console.error("Error checking windows support:", error);
+        return false;
+    }
+}
+
 /** Bouton et module Enregistrement groupé d'une page d'Historique BGA (script de la page BGA). */
 export interface BulkRegistrationPage {
     availability: BulkRegistrationAvailability;
@@ -47,7 +61,12 @@ export default class bulkRegistrationService {
 
         const connectedUser: User | null = await boardGameArenaService.isConnected().then(user => user || null);
         const displayedPlayer = new URLSearchParams(window.location.search).get("player");
-        const availability = bulkRegistrationAvailability(configuration, displayedPlayer, connectedUser?.id ?? null);
+        const availability = bulkRegistrationAvailability(
+            configuration,
+            displayedPlayer,
+            connectedUser?.id ?? null,
+            await canOpenWindows()
+        );
         if (availability.kind !== "enabled" || !connectedUser) return { availability };
 
         const search = gameStatsService.currentFilters(connectedUser);
@@ -57,7 +76,8 @@ export default class bulkRegistrationService {
                 table => gameStatsService.toRegistrationTable(table, connectedUser.id)
             ),
             statuses: registrationStatusService,
-            clock: systemClock
+            clock: systemClock,
+            openFormDriver: openPortFormDriver
         });
 
         return { availability, module };

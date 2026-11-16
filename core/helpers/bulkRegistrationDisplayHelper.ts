@@ -1,8 +1,10 @@
 import type {
     BulkAnalysis,
+    BulkRecap,
     BulkRegistrationAvailability,
     BulkRegistrationRequiredOption,
-    DiscardReason
+    DiscardReason,
+    RegistrationProgress
 } from "~/core/bulkRegistration/types";
 
 /** Marqueur du panneau (jamais la classe des liens Myludo : elle sert de garde d'injection des lignes). */
@@ -21,6 +23,14 @@ const DISCARD_LABELS: Record<DiscardReason, string> = {
 
 const BUTTON_CLASS = "myludo-bulk-registration-button";
 const MESSAGE_CLASS = "myludo-bulk-registration-message";
+const ACTIONS_CLASS = "myludo-bulk-registration-actions";
+const DETAILS_CLASS = "myludo-bulk-registration-details";
+
+/** Table en échec dans le récapitulatif, avec l'URL de son lien unitaire (null : pas de lien). */
+export interface FailedTableLink {
+    tableId: string;
+    url: string | null;
+}
 
 function message(key: string, tokens: Record<string, string | number> = {}): string {
     return Object.entries(tokens).reduce(
@@ -50,6 +60,18 @@ export default class bulkRegistrationDisplayHelper {
         text.classList.add(MESSAGE_CLASS);
         text.style.cssText = "margin-top: 4px; white-space: pre-line;";
         panel.appendChild(text);
+
+        // boutons de confirmation
+        const actions = document.createElement("div");
+        actions.classList.add(ACTIONS_CLASS);
+        actions.style.cssText = "margin-top: 4px;";
+        panel.appendChild(actions);
+
+        // liens unitaires des Tables en échec
+        const details = document.createElement("div");
+        details.classList.add(DETAILS_CLASS);
+        details.style.cssText = "margin-top: 4px;";
+        panel.appendChild(details);
 
         if (availability.kind === "disabled") {
             const explanation = bulkRegistrationDisplayHelper.missingOptionsText(availability.missingOptions);
@@ -96,20 +118,24 @@ export default class bulkRegistrationDisplayHelper {
     }
 
     static showAnalysing(panel: HTMLElement, tablesRead: number) {
+        bulkRegistrationDisplayHelper.clearExtras(panel);
         bulkRegistrationDisplayHelper.showText(panel, message("bulkRegistrationAnalysingText", { COUNT: tablesRead }));
     }
 
-    static showAnalysis(panel: HTMLElement, analysis: BulkAnalysis) {
+    /** Tables écartées : leur nombre, suivi du détail par raison. */
+    private static discardedText(discarded: Record<DiscardReason, string[]>): string {
         const reasons = (Object.keys(DISCARD_LABELS) as DiscardReason[])
-            .filter(reason => analysis.discarded[reason].length > 0)
-            .map(reason => message(DISCARD_LABELS[reason], { COUNT: analysis.discarded[reason].length }));
-        const discardedCount = reasons.length === 0
+            .filter(reason => discarded[reason].length > 0)
+            .map(reason => message(DISCARD_LABELS[reason], { COUNT: discarded[reason].length }));
+        return reasons.length === 0
             ? "0"
-            : `${Object.values(analysis.discarded).reduce((sum, ids) => sum + ids.length, 0)} (${reasons.join(", ")})`;
+            : `${Object.values(discarded).reduce((sum, ids) => sum + ids.length, 0)} (${reasons.join(", ")})`;
+    }
 
+    static showAnalysis(panel: HTMLElement, analysis: BulkAnalysis) {
         const lines = [message("bulkRegistrationAnalysisText", {
             TO_REGISTER: analysis.toRegister.length,
-            DISCARDED: discardedCount,
+            DISCARDED: bulkRegistrationDisplayHelper.discardedText(analysis.discarded),
             REGISTERED: analysis.alreadyRegistered.length
         })];
 
@@ -123,6 +149,93 @@ export default class bulkRegistrationDisplayHelper {
 
     static showError(panel: HTMLElement) {
         bulkRegistrationDisplayHelper.showText(panel, message("bulkRegistrationAnalysisErrorText"));
+    }
+
+    /**
+     * Confirmation dans la page, avec le nombre de Tables, avant tout envoi (jamais de `confirm` du navigateur).
+     * La question s'ajoute sous le résultat de l'analyse.
+     */
+    static showConfirmation(panel: HTMLElement, count: number, onConfirm: () => void) {
+        const element = panel.querySelector(`.${MESSAGE_CLASS}`);
+        if (element) element.textContent = `${element.textContent}\n${message("bulkRegistrationConfirmText", { COUNT: count })}`;
+
+        const actions = panel.querySelector(`.${ACTIONS_CLASS}`);
+        if (!actions) return;
+
+        const confirm = bulkRegistrationDisplayHelper.createActionButton("bulkRegistrationConfirmButtonText", "bgabutton_blue");
+        confirm.addEventListener("click", event => {
+            event.preventDefault();
+            actions.replaceChildren();
+            onConfirm();
+        });
+
+        const cancel = bulkRegistrationDisplayHelper.createActionButton("bulkRegistrationCancelButtonText", "bgabutton_gray");
+        cancel.style.marginLeft = "8px";
+        cancel.addEventListener("click", event => {
+            event.preventDefault();
+            actions.replaceChildren();
+        });
+
+        actions.replaceChildren(confirm, cancel);
+    }
+
+    /** Progression « n / total » de l'enregistrement. */
+    static showProgress(panel: HTMLElement, progress: RegistrationProgress) {
+        bulkRegistrationDisplayHelper.showText(panel, message("bulkRegistrationProgressText", {
+            RANK: progress.rank,
+            TOTAL: progress.total,
+            TABLE_ID: progress.table.tableId
+        }));
+    }
+
+    /** Récapitulatif : enregistrées, échecs (avec le lien unitaire de chaque Table), écartées par raison. */
+    static showRecap(panel: HTMLElement, recap: BulkRecap, failedLinks: FailedTableLink[]) {
+        bulkRegistrationDisplayHelper.showText(panel, message("bulkRegistrationRecapText", {
+            REGISTERED: recap.registered.length,
+            FAILED: recap.failed.length,
+            DISCARDED: bulkRegistrationDisplayHelper.discardedText(recap.discarded)
+        }));
+
+        const details = panel.querySelector(`.${DETAILS_CLASS}`);
+        if (!details || failedLinks.length === 0) return;
+
+        const title = document.createElement("div");
+        title.textContent = message("bulkRegistrationFailedTablesText");
+        const list = document.createElement("div");
+        list.style.cssText = "display: flex; flex-wrap: wrap; gap: 4px 12px;";
+        failedLinks.forEach(({ tableId, url }) => {
+            const label = `#${tableId}`;
+            if (!url) {
+                list.appendChild(document.createTextNode(label));
+                return;
+            }
+            // jamais la classe des liens Myludo des lignes : elle sert de garde d'injection
+            const link = document.createElement("a");
+            link.href = url;
+            link.target = "_blank";
+            link.textContent = label;
+            list.appendChild(link);
+        });
+        details.replaceChildren(title, list);
+    }
+
+    static showRegistrationError(panel: HTMLElement) {
+        bulkRegistrationDisplayHelper.showText(panel, message("bulkRegistrationRegistrationErrorText"));
+    }
+
+    private static createActionButton(labelKey: string, colorClass: string): HTMLAnchorElement {
+        const button = document.createElement("a");
+        button.href = "#";
+        button.classList.add("bgabutton", colorClass);
+        button.style.cssText = "display: inline-block;";
+        button.textContent = chrome.i18n.getMessage(labelKey);
+        return button;
+    }
+
+    /** Retire la confirmation et le détail des échecs d'un lancement précédent. */
+    private static clearExtras(panel: HTMLElement) {
+        panel.querySelector(`.${ACTIONS_CLASS}`)?.replaceChildren();
+        panel.querySelector(`.${DETAILS_CLASS}`)?.replaceChildren();
     }
 
     private static showText(panel: HTMLElement, text: string) {

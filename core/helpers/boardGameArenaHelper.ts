@@ -16,6 +16,17 @@ interface LinkResult {
 }
 
 export default class boardGameArenaHelper {
+    /** URL du lien unitaire : le formulaire Myludo de la Table, prérempli par le script Myludo. */
+    static myludoPlayUrl(myludoGameId: string, tableId: string): string {
+        return `https://www.myludo.fr/#!/game/${myludoGameId}/plays?bgatableid=${tableId}`;
+    }
+
+    /** URL du lien unitaire d'une Table, ou null si son jeu n'a pas de Correspondance de jeu (Jeu indisponible). */
+    static async myludoFormUrl(bgaGameId: string, tableId: string): Promise<string | null> {
+        const gameInfo = await configurationService.getGame(bgaGameId);
+        return gameInfo?.currentMyludoId ? boardGameArenaHelper.myludoPlayUrl(gameInfo.currentMyludoId, tableId) : null;
+    }
+
     private static async createLinkElement(config: LinkConfig): Promise<LinkResult> {
         try {
             // Si gameId est null, retourner un lien en erreur
@@ -33,7 +44,7 @@ export default class boardGameArenaHelper {
             if (gameInfo && gameInfo.currentMyludoId) {
                 // Jeu mappé - redirection directe vers la page du jeu
                 return {
-                    href: `https://www.myludo.fr/#!/game/${gameInfo.currentMyludoId}/plays?bgatableid=${config.tableId}`,
+                    href: boardGameArenaHelper.myludoPlayUrl(gameInfo.currentMyludoId, config.tableId),
                     text: chrome.i18n.getMessage("myLudoLinkText") || chrome.i18n.getMessage("myludoLinkText"),
                     cssClass: config.isButton ? "bgabutton_darkgray" : undefined
                 };

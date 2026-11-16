@@ -1,6 +1,7 @@
 import { sendToBackground } from "~/core/messaging/sendToBackground";
 import { BackgroundMessages } from "~/core/models/backgroundMessages";
 import type { Table as GetGamesTable } from "~/core/models/boardGameArena/getGamesResponse";
+import type { User } from "~/core/models/user";
 import type { RegistrationStatuses, RegistrationTable } from "~/core/registrationStatus/types";
 import { createHistorySource } from "./historySource";
 
@@ -24,7 +25,12 @@ const historySource = createHistorySource<GetGamesTable>({
     toRegistrationTable: (table, connectedUserId) => gameStatsService.toRegistrationTable(table, connectedUserId)
 });
 
-const currentFilters = () => window.location.search;
+// sans `player` dans l'URL (lien « Statistiques de jeu » du menu BGA), la page affiche le joueur connecté ; getGames l'exige
+const currentFilters = (connectedUser: User) => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get("player")) params.set("player", String(connectedUser.id));
+    return `?${params.toString()}`;
+};
 
 export default class gameStatsService {
     /** Paramètres `getGames` d'une page, repris des filtres de l'URL de « Statistiques de jeu ». */

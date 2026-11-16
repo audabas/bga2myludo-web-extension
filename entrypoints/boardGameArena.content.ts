@@ -1,22 +1,76 @@
 import boardGameArenaHelper from "~/core/helpers/boardGameArenaHelper";
 import registrationStatusDisplayHelper from "~/core/helpers/registrationStatusDisplayHelper";
+import { createInvalidatedTables } from "~/core/registrationStatus/invalidatedTables";
+import type { RegistrationStatuses } from "~/core/registrationStatus/types";
 import gameStatsService from "~/core/services/gameStatsService";
 import lastResultsService from "~/core/services/lastResultsService";
+import registrationStatusService from "~/core/services/registrationStatusService";
 
 export default defineContentScript({
     matches: ["https://boardgamearena.com/*"],
     allFrames: true,
     main() {
         const myLudoEltId = "myludo-browser-extension-button";
+        const regexTablePage = /^https:\/\/boardgamearena\.com\/table\?table=\d+#?$/;
+        const regexpEndGamePage = /^https:\/\/boardgamearena\.com\/.*\btable=\d+.*$/;
+        const regexpGameStatsPage = /^https:\/\/boardgamearena\.com\/gamestats/;
+        const regexpLastResultsPage = /^https:\/\/boardgamearena\.com\/player\?(?=.*[?&]section=lastresults(&|$))/;
+
+        // Tables dont le lien a été cliqué : revérifiées au retour sur l'onglet
+        const invalidatedTables = createInvalidatedTables(registrationStatusService);
+
+        document.addEventListener("click", invalidateClickedTable, true);
+        document.addEventListener("auxclick", invalidateClickedTable, true);
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") refreshInvalidatedStatuses();
+        });
 
         patch();
 
-        async function patch() {
-            const regexTablePage = /^https:\/\/boardgamearena\.com\/table\?table=\d+#?$/;
-            const regexpEndGamePage = /^https:\/\/boardgamearena\.com\/.*\btable=\d+.*$/;
-            const regexpGameStatsPage = /^https:\/\/boardgamearena\.com\/gamestats/;
-            const regexpLastResultsPage = /^https:\/\/boardgamearena\.com\/player\?(?=.*[?&]section=lastresults(&|$))/;
+        /** Clic (ou clic molette) sur le lien Myludo d'une Table : son Statut d'enregistrement est invalidé. */
+        function invalidateClickedTable(event: MouseEvent) {
+            if (event.type === "auxclick" && event.button !== 1) return;
+            if (!(event.target instanceof Element)) return;
 
+            const link = event.target.closest<HTMLAnchorElement>(`a.${myLudoEltId}[data-myludo-table-id]`);
+            if (!link) return;
+
+            invalidatedTables.invalidate(link.dataset.myludoTableId!)
+                .catch(error => console.error("Error invalidating Myludo registration status:", error));
+        }
+
+        /** Numéros des Tables dont le lien Myludo est affiché dans `container`. */
+        function displayedTableIds(container: string): string[] {
+            const links = document.querySelectorAll<HTMLAnchorElement>(`${container} a.${myLudoEltId}[data-myludo-table-id]`);
+            return Array.from(links, link => link.dataset.myludoTableId!);
+        }
+
+        /** Retour sur l'onglet : seules les Tables invalidées affichées sur la page sont recalculées. */
+        function refreshInvalidatedStatuses() {
+            let displayed: string[];
+            let recompute: (tableIds: string[]) => Promise<RegistrationStatuses>;
+
+            if (regexpGameStatsPage.test(window.location.href)) {
+                displayed = displayedTableIds("#gamelist_inner");
+                recompute = tableIds => gameStatsService.refreshStatuses(tableIds);
+            } else if (regexpLastResultsPage.test(window.location.href)) {
+                displayed = displayedTableIds("#boardposts_r");
+                recompute = tableIds => lastResultsService.refreshStatuses(lastResultsPlayerId(), tableIds);
+            } else {
+                return;
+            }
+
+            invalidatedTables.refresh(displayed, recompute)
+                .then(statuses => registrationStatusDisplayHelper.apply(statuses))
+                .catch(error => console.error("Error refreshing Myludo registration statuses:", error));
+        }
+
+        /** Joueur dont la page « Derniers résultats » est affichée (absent : le joueur connecté). */
+        function lastResultsPlayerId(): string | null {
+            return new URLSearchParams(window.location.search).get("id");
+        }
+
+        async function patch() {
             if (document.getElementsByClassName(myLudoEltId).length === 0) {
                 if (regexTablePage.test(window.location.href)) {
                     await patchTablePage();
@@ -114,12 +168,7 @@ export default defineContentScript({
         }
 
         function updateLastResultsStatuses() {
-            const links = document.querySelectorAll<HTMLAnchorElement>(`#boardposts_r a.${myLudoEltId}[data-myludo-table-id]`);
-            const tableIds = Array.from(links, link => link.dataset.myludoTableId!);
-            // joueur dont la page est affichée (absent : le joueur connecté)
-            const playerId = new URLSearchParams(window.location.search).get("id");
-
-            lastResultsService.showStatuses(playerId, tableIds, statuses => registrationStatusDisplayHelper.apply(statuses));
+            lastResultsService.showStatuses(lastResultsPlayerId(), displayedTableIds("#boardposts_r"), statuses => registrationStatusDisplayHelper.apply(statuses));
         }
 
         function fetchAndFeedLastResultsPage(_page: number) {
@@ -206,10 +255,7 @@ export default defineContentScript({
         }
 
         function updateGameStatsStatuses() {
-            const links = document.querySelectorAll<HTMLAnchorElement>(`#gamelist_inner a.${myLudoEltId}[data-myludo-table-id]`);
-            const tableIds = Array.from(links, link => link.dataset.myludoTableId!);
-
-            gameStatsService.showStatuses(tableIds, statuses => registrationStatusDisplayHelper.apply(statuses));
+            gameStatsService.showStatuses(displayedTableIds("#gamelist_inner"), statuses => registrationStatusDisplayHelper.apply(statuses));
         }
 
         function fetchAndFeedStatsPage(_page: number) {

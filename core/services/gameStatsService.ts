@@ -107,25 +107,30 @@ export default class gameStatsService {
         }
     }
 
+    /** Statuts des Tables données, calculés avec le cache. */
+    private static async statusesOf(tableIds: string[]): Promise<RegistrationStatuses> {
+        connectedUser ??= boardGameArenaService.isConnected().then(user => user || null);
+        const user = await connectedUser;
+        if (!user) return new Map();
+
+        await gameStatsService.loadTables(tableIds);
+
+        const tables = tableIds
+            .map(id => knownTables.get(id))
+            .map(table => table ? gameStatsService.toRegistrationTable(table, user.id) : null)
+            .filter((table): table is RegistrationTable => table !== null);
+
+        if (tables.length === 0) return new Map();
+
+        return registrationStatusService.getStatuses(tables);
+    }
+
     private static async computeStatuses(tableIds: string[], onStatuses: (statuses: RegistrationStatuses) => void) {
         const newTableIds = tableIds.filter(id => !requestedTableIds.has(id));
         if (newTableIds.length === 0) return;
         newTableIds.forEach(id => requestedTableIds.add(id));
 
-        connectedUser ??= boardGameArenaService.isConnected().then(user => user || null);
-        const user = await connectedUser;
-        if (!user) return;
-
-        await gameStatsService.loadTables(newTableIds);
-
-        const tables = newTableIds
-            .map(id => knownTables.get(id))
-            .map(table => table ? gameStatsService.toRegistrationTable(table, user.id) : null)
-            .filter((table): table is RegistrationTable => table !== null);
-
-        if (tables.length === 0) return;
-
-        onStatuses(await registrationStatusService.getStatuses(tables));
+        onStatuses(await gameStatsService.statusesOf(newTableIds));
     }
 
     /** Calcule le Statut d'enregistrement des Tables affichées (une seule fois par Table), puis appelle `onStatuses`. */
@@ -134,5 +139,12 @@ export default class gameStatsService {
             .then(() => gameStatsService.computeStatuses(tableIds, onStatuses))
             .catch(error => console.error("Error computing Myludo registration statuses:", error));
         return queue;
+    }
+
+    /** Recalcule le Statut d'enregistrement de Tables déjà affichées (Tables invalidées), à la suite des autres calculs. */
+    static refreshStatuses(tableIds: string[]): Promise<RegistrationStatuses> {
+        const result = queue.then(() => gameStatsService.statusesOf(tableIds));
+        queue = result.then(() => undefined, () => undefined);
+        return result;
     }
 }

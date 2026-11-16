@@ -3,7 +3,7 @@ import { BackgroundMessages } from "~/core/models/backgroundMessages";
 import type { Table as GetGamesTable } from "~/core/models/boardGameArena/getGamesResponse";
 import type { User } from "~/core/models/user";
 import type { RegistrationStatuses, RegistrationTable } from "~/core/registrationStatus/types";
-import { createHistorySource } from "./historySource";
+import { createHistorySource, type HistoryFeed } from "./historySource";
 
 function splitList(value: string | null | undefined): string[] {
     return value ? String(value).split(",") : [];
@@ -11,7 +11,24 @@ function splitList(value: string | null | undefined): string[] {
 
 // Tables de la page « Statistiques de jeu », lues page à page ; un nouveau fil quand les filtres de l'URL changent
 const historySource = createHistorySource<GetGamesTable>({
-    openFeed: search => {
+    openFeed: search => gameStatsService.openFeed(search),
+    tableIdOf: table => String(table.table_id),
+    toRegistrationTable: (table, connectedUserId) => gameStatsService.toRegistrationTable(table, connectedUserId)
+});
+
+const currentFilters = (connectedUser: User) => gameStatsService.currentFilters(connectedUser);
+
+export default class gameStatsService {
+    /** Filtres de l'URL courante de « Statistiques de jeu », avec le joueur affiché. */
+    static currentFilters(connectedUser: User): string {
+        // sans `player` dans l'URL (lien « Statistiques de jeu » du menu BGA), la page affiche le joueur connecté ; getGames l'exige
+        const params = new URLSearchParams(window.location.search);
+        if (!params.get("player")) params.set("player", String(connectedUser.id));
+        return `?${params.toString()}`;
+    }
+
+    /** Fil `getGames` des filtres donnés, lu page à page depuis la première ; la fin coûte une page vide. */
+    static openFeed(search: string): HistoryFeed<GetGamesTable> {
         let page = 1;
         return async () => {
             const tables = await gameStatsService.getTables(search, page);
@@ -20,19 +37,8 @@ const historySource = createHistorySource<GetGamesTable>({
             page++;
             return { entries: tables, isLast: tables.length === 0 };
         };
-    },
-    tableIdOf: table => String(table.table_id),
-    toRegistrationTable: (table, connectedUserId) => gameStatsService.toRegistrationTable(table, connectedUserId)
-});
+    }
 
-// sans `player` dans l'URL (lien « Statistiques de jeu » du menu BGA), la page affiche le joueur connecté ; getGames l'exige
-const currentFilters = (connectedUser: User) => {
-    const params = new URLSearchParams(window.location.search);
-    if (!params.get("player")) params.set("player", String(connectedUser.id));
-    return `?${params.toString()}`;
-};
-
-export default class gameStatsService {
     /** Paramètres `getGames` d'une page, repris des filtres de l'URL de « Statistiques de jeu ». */
     static buildQuery(search: string, page: number): string {
         const urlParams = new URLSearchParams(search);

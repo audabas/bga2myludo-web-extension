@@ -3,15 +3,12 @@ import { BackgroundMessages } from "~/core/models/backgroundMessages";
 import type { News } from "~/core/models/boardGameArena/BoardResponse";
 import type { User } from "~/core/models/user";
 import type { RegistrationPlayer, RegistrationStatuses, RegistrationTable } from "~/core/registrationStatus/types";
-import boardGameArenaService from "./boardGameArenaService";
-import registrationStatusService from "./registrationStatusService";
+import { createHistorySource } from "./historySource";
 
 // type d'entrée `message/board` correspondant à un résultat de partie (les trophées sont "30")
 const GAME_RESULT_NEWS_TYPE = "2";
 // taille de page utilisée par BGA sur « Derniers résultats »
 const PER_PAGE = 10;
-// nombre maximal de pages `message/board` lues pour retrouver les lignes affichées
-const MAX_PAGES = 30;
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " " };
 
@@ -20,16 +17,6 @@ export interface BoardCursor {
     timestamp: string;
     refid: string;
 }
-
-// état de la page « Derniers résultats » courante
-const knownTables = new Map<string, News>();
-const requestedTableIds = new Set<string>();
-let cursor: BoardCursor | null = null;
-let pagesRead = 0;
-let noMorePages = false;
-let currentPlayerId: string | null = null;
-let connectedUser: Promise<User | null> | null = null;
-let queue: Promise<void> = Promise.resolve();
 
 function decodeHtml(value: string): string {
     return value
@@ -68,16 +55,29 @@ function parseTableId(news: News): string | null {
     return news.html?.match(/href="\/?table\?table=(\d+)"/)?.[1] ?? null;
 }
 
-/** Repart du début du fil si la page affiche un autre joueur. */
-function resetIfPlayerChanged(playerId: string) {
-    if (currentPlayerId === playerId) return;
+// entrées de « Derniers résultats », lues en suivant le curseur du fil ; un nouveau fil quand le joueur affiché change
+const historySource = createHistorySource<News>({
+    openFeed: playerId => {
+        let cursor: BoardCursor | null = null;
+        return async () => {
+            const news = await lastResultsService.getNews(lastResultsService.buildQuery(playerId, cursor));
+            if (!news) return null;
 
-    currentPlayerId = playerId;
-    knownTables.clear();
-    cursor = null;
-    pagesRead = 0;
-    noMorePages = false;
-}
+            const last = news[news.length - 1];
+            const next = last ? { timestamp: String(last.timestamp), refid: String(last.refid) } : null;
+            // fin du fil (ou curseur qui n'avance plus)
+            const isLast = !next || (next.timestamp === cursor?.timestamp && next.refid === cursor?.refid);
+            cursor = next;
+
+            return { entries: news, isLast };
+        };
+    },
+    tableIdOf: parseTableId,
+    toRegistrationTable: (news, connectedUserId) => lastResultsService.toRegistrationTable(news, connectedUserId)
+});
+
+/** Fil du joueur `playerId`, à défaut le joueur connecté. */
+const playerFeed = (playerId: string | null) => (connectedUser: User) => playerId || String(connectedUser.id);
 
 export default class lastResultsService {
     /** Paramètres `message/board` des résultats de partie d'un joueur, à partir de `from` (page suivante) si fourni. */
@@ -133,79 +133,16 @@ export default class lastResultsService {
         };
     }
 
-    /** Lit les pages `message/board` suivantes jusqu'à connaître toutes les Tables demandées. */
-    private static async loadTables(playerId: string, tableIds: string[]) {
-        resetIfPlayerChanged(playerId);
-
-        while (!noMorePages && pagesRead < MAX_PAGES && tableIds.some(id => !knownTables.has(id))) {
-            const news = await lastResultsService.getNews(lastResultsService.buildQuery(playerId, cursor));
-
-            if (!news) return;
-
-            pagesRead++;
-            news.forEach(item => {
-                const tableId = parseTableId(item);
-                if (tableId) knownTables.set(tableId, item);
-            });
-
-            const last = news[news.length - 1];
-            const next = last ? { timestamp: String(last.timestamp), refid: String(last.refid) } : null;
-            // fin du fil (ou curseur qui n'avance plus)
-            if (!next || (next.timestamp === cursor?.timestamp && next.refid === cursor?.refid)) {
-                noMorePages = true;
-                return;
-            }
-            cursor = next;
-        }
-    }
-
-    /** Statuts des Tables données (fil du joueur `playerId`, à défaut le joueur connecté), calculés avec le cache. */
-    private static async statusesOf(playerId: string | null, tableIds: string[]): Promise<RegistrationStatuses> {
-        // option désactivée (y compris le recalcul au retour sur l'onglet) : aucun appel BGA ni Myludo
-        if (!(await registrationStatusService.isHistoryEnabled())) return new Map();
-
-        connectedUser ??= boardGameArenaService.isConnected().then(user => user || null);
-        const user = await connectedUser;
-        if (!user) return new Map();
-
-        await lastResultsService.loadTables(playerId || String(user.id), tableIds);
-
-        const tables = tableIds
-            .map(id => knownTables.get(id))
-            .map(news => news ? lastResultsService.toRegistrationTable(news, user.id) : null)
-            .filter((table): table is RegistrationTable => table !== null);
-
-        if (tables.length === 0) return new Map();
-
-        return registrationStatusService.getStatuses(tables);
-    }
-
-    private static async computeStatuses(playerId: string | null, tableIds: string[], onStatuses: (statuses: RegistrationStatuses) => void) {
-        // option désactivée : la page reste telle qu'aujourd'hui, sans aucun appel BGA ni Myludo
-        if (!(await registrationStatusService.isHistoryEnabled())) return;
-
-        const newTableIds = tableIds.filter(id => !requestedTableIds.has(id));
-        if (newTableIds.length === 0) return;
-        newTableIds.forEach(id => requestedTableIds.add(id));
-
-        onStatuses(await lastResultsService.statusesOf(playerId, newTableIds));
-    }
-
     /**
      * Calcule le Statut d'enregistrement des Tables affichées sur « Derniers résultats » du joueur `playerId`
      * (une seule fois par Table), puis appelle `onStatuses`.
      */
     static showStatuses(playerId: string | null, tableIds: string[], onStatuses: (statuses: RegistrationStatuses) => void) {
-        queue = queue
-            .then(() => lastResultsService.computeStatuses(playerId, tableIds, onStatuses))
-            .catch(error => console.error("Error computing Myludo registration statuses:", error));
-        return queue;
+        return historySource.showStatuses(playerFeed(playerId), tableIds, onStatuses);
     }
 
     /** Recalcule le Statut d'enregistrement de Tables déjà affichées (Tables invalidées), à la suite des autres calculs. */
     static refreshStatuses(playerId: string | null, tableIds: string[]): Promise<RegistrationStatuses> {
-        const result = queue.then(() => lastResultsService.statusesOf(playerId, tableIds));
-        queue = result.then(() => undefined, () => undefined);
-        return result;
+        return historySource.refreshStatuses(playerFeed(playerId), tableIds);
     }
 }

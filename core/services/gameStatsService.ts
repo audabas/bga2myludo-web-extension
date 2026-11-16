@@ -1,36 +1,30 @@
 import { sendToBackground } from "~/core/messaging/sendToBackground";
 import { BackgroundMessages } from "~/core/models/backgroundMessages";
 import type { Table as GetGamesTable } from "~/core/models/boardGameArena/getGamesResponse";
-import type { User } from "~/core/models/user";
 import type { RegistrationStatuses, RegistrationTable } from "~/core/registrationStatus/types";
-import boardGameArenaService from "./boardGameArenaService";
-import registrationStatusService from "./registrationStatusService";
-
-// nombre maximal de pages `getGames` lues pour retrouver les lignes affichées
-const MAX_PAGES = 30;
-
-// état de la page « Statistiques de jeu » courante
-const knownTables = new Map<string, GetGamesTable>();
-const requestedTableIds = new Set<string>();
-let nextPage = 1;
-let noMorePages = false;
-let currentSearch: string | null = null;
-let connectedUser: Promise<User | null> | null = null;
-let queue: Promise<void> = Promise.resolve();
+import { createHistorySource } from "./historySource";
 
 function splitList(value: string | null | undefined): string[] {
     return value ? String(value).split(",") : [];
 }
 
-/** Repart de la première page `getGames` si les filtres de l'URL ont changé. */
-function resetIfFiltersChanged() {
-    if (currentSearch === window.location.search) return;
+// Tables de la page « Statistiques de jeu », lues page à page ; un nouveau fil quand les filtres de l'URL changent
+const historySource = createHistorySource<GetGamesTable>({
+    openFeed: search => {
+        let page = 1;
+        return async () => {
+            const tables = await gameStatsService.getTables(search, page);
+            if (!tables) return null;
 
-    currentSearch = window.location.search;
-    knownTables.clear();
-    nextPage = 1;
-    noMorePages = false;
-}
+            page++;
+            return { entries: tables, isLast: tables.length === 0 };
+        };
+    },
+    tableIdOf: table => String(table.table_id),
+    toRegistrationTable: (table, connectedUserId) => gameStatsService.toRegistrationTable(table, connectedUserId)
+});
+
+const currentFilters = () => window.location.search;
 
 export default class gameStatsService {
     /** Paramètres `getGames` d'une page, repris des filtres de l'URL de « Statistiques de jeu ». */
@@ -52,10 +46,10 @@ export default class gameStatsService {
         return query.toString();
     }
 
-    static async getTables(page: number): Promise<GetGamesTable[] | null> {
+    static async getTables(search: string, page: number): Promise<GetGamesTable[] | null> {
         return sendToBackground<GetGamesTable[] | null>({
             name: BackgroundMessages.GET_BGA_GAMES,
-            body: { query: gameStatsService.buildQuery(window.location.search, page) }
+            body: { query: gameStatsService.buildQuery(search, page) }
         })
             .then(response => response?.message ?? null)
             .catch(() => null);
@@ -89,68 +83,13 @@ export default class gameStatsService {
         };
     }
 
-    /** Lit les pages `getGames` suivantes jusqu'à connaître toutes les Tables demandées. */
-    private static async loadTables(tableIds: string[]) {
-        resetIfFiltersChanged();
-
-        while (!noMorePages && nextPage <= MAX_PAGES && tableIds.some(id => !knownTables.has(id))) {
-            const tables = await gameStatsService.getTables(nextPage);
-
-            if (!tables) return;
-            if (tables.length === 0) {
-                noMorePages = true;
-                return;
-            }
-
-            tables.forEach(table => knownTables.set(String(table.table_id), table));
-            nextPage++;
-        }
-    }
-
-    /** Statuts des Tables données, calculés avec le cache. */
-    private static async statusesOf(tableIds: string[]): Promise<RegistrationStatuses> {
-        // option désactivée (y compris le recalcul au retour sur l'onglet) : aucun appel BGA ni Myludo
-        if (!(await registrationStatusService.isHistoryEnabled())) return new Map();
-
-        connectedUser ??= boardGameArenaService.isConnected().then(user => user || null);
-        const user = await connectedUser;
-        if (!user) return new Map();
-
-        await gameStatsService.loadTables(tableIds);
-
-        const tables = tableIds
-            .map(id => knownTables.get(id))
-            .map(table => table ? gameStatsService.toRegistrationTable(table, user.id) : null)
-            .filter((table): table is RegistrationTable => table !== null);
-
-        if (tables.length === 0) return new Map();
-
-        return registrationStatusService.getStatuses(tables);
-    }
-
-    private static async computeStatuses(tableIds: string[], onStatuses: (statuses: RegistrationStatuses) => void) {
-        // option désactivée : la page reste telle qu'aujourd'hui, sans aucun appel BGA ni Myludo
-        if (!(await registrationStatusService.isHistoryEnabled())) return;
-
-        const newTableIds = tableIds.filter(id => !requestedTableIds.has(id));
-        if (newTableIds.length === 0) return;
-        newTableIds.forEach(id => requestedTableIds.add(id));
-
-        onStatuses(await gameStatsService.statusesOf(newTableIds));
-    }
-
     /** Calcule le Statut d'enregistrement des Tables affichées (une seule fois par Table), puis appelle `onStatuses`. */
     static showStatuses(tableIds: string[], onStatuses: (statuses: RegistrationStatuses) => void) {
-        queue = queue
-            .then(() => gameStatsService.computeStatuses(tableIds, onStatuses))
-            .catch(error => console.error("Error computing Myludo registration statuses:", error));
-        return queue;
+        return historySource.showStatuses(currentFilters, tableIds, onStatuses);
     }
 
     /** Recalcule le Statut d'enregistrement de Tables déjà affichées (Tables invalidées), à la suite des autres calculs. */
     static refreshStatuses(tableIds: string[]): Promise<RegistrationStatuses> {
-        const result = queue.then(() => gameStatsService.statusesOf(tableIds));
-        queue = result.then(() => undefined, () => undefined);
-        return result;
+        return historySource.refreshStatuses(currentFilters, tableIds);
     }
 }

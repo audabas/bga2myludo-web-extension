@@ -34,6 +34,9 @@ export interface RegistrationTable {
 
 export type UndeterminedReason = "notConnected" | "permissionMissing" | "error";
 
+/** Raison d'indétermination commune à tout le compte Myludo : aucune Table ne peut être vérifiée. */
+export type MyludoAccountIssue = Exclude<UndeterminedReason, "error">;
+
 export type RegistrationStatus =
     | { kind: "registered" }
     | { kind: "notRegistered" }

@@ -1,4 +1,4 @@
-import type { RegistrationStatus, RegistrationTable } from "~/core/registrationStatus/types";
+import type { MyludoAccountIssue, RegistrationStatus, RegistrationTable } from "~/core/registrationStatus/types";
 import type {
     BulkAnalysis,
     BulkFormDriver,
@@ -36,6 +36,12 @@ const PAUSE_BETWEEN_TABLES_MS = 2_000;
 /** Nombre d'échecs à la suite qui arrête le parcours : Myludo ne répond plus, ou son formulaire a changé. */
 const MAX_CONSECUTIVE_FAILURES = 3;
 
+/** Problème de compte Myludo signalé par un statut indéterminé (aucune Table ne peut alors être vérifiée), ou undefined. */
+function myludoAccountIssueOf(status: RegistrationStatus | undefined): MyludoAccountIssue | undefined {
+    if (status?.kind !== "undetermined" || status.reason === "error") return undefined;
+    return status.reason;
+}
+
 /** Range une Table dans l'analyse selon son Statut d'enregistrement. */
 function classify(analysis: BulkAnalysis, table: RegistrationTable, status: RegistrationStatus | undefined) {
     if (status?.kind === "gameUnavailable") {
@@ -45,9 +51,7 @@ function classify(analysis: BulkAnalysis, table: RegistrationTable, status: Regi
     } else if (status?.kind !== "notRegistered") {
         // sans statut, la Table est traitée comme indéterminée : on ne risque pas de doublon
         analysis.discarded.undetermined.push(table.tableId);
-        if (status?.reason === "notConnected" || status?.reason === "permissionMissing") {
-            analysis.myludoAccountIssue = status.reason;
-        }
+        analysis.myludoAccountIssue ??= myludoAccountIssueOf(status);
     } else if (table.isAbandoned) {
         analysis.discarded.abandoned.push(table.tableId);
     } else {
@@ -227,8 +231,8 @@ export function createBulkRegistration(deps: BulkRegistrationDependencies): Bulk
             const status = (await deps.statuses.getStatuses([table], { useCache: false, cacheRegistered: true })).get(table.tableId);
             if (status?.kind === "registered") return true;
             // le compte Myludo ne peut plus être interrogé : continuer accumulerait des échecs
-            if (status?.kind === "undetermined" && status.reason === "notConnected") run.requestStop("myludoNotConnected");
-            if (status?.kind === "undetermined" && status.reason === "permissionMissing") run.requestStop("myludoPermissionMissing");
+            const accountIssue = myludoAccountIssueOf(status);
+            if (accountIssue) run.requestStop(accountIssue);
             if (run.stopReason) return false;
         }
         return false;

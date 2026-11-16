@@ -1,4 +1,4 @@
-import type { RegistrationStatusModule, RegistrationTable } from "~/core/registrationStatus/types";
+import type { MyludoAccountIssue, RegistrationStatusModule, RegistrationTable } from "~/core/registrationStatus/types";
 
 // ---------------------------------------------------------------------------
 // Dépendances injectées
@@ -100,7 +100,7 @@ export interface BulkAnalysis {
      * pour cette raison : l'analyse s'arrête dès qu'elle la constate (aucune autre Table ne pourrait être vérifiée),
      * et la page invite à se connecter plutôt que d'annoncer des Tables écartées.
      */
-    myludoAccountIssue?: "notConnected" | "permissionMissing";
+    myludoAccountIssue?: MyludoAccountIssue;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,10 +122,10 @@ export interface RegistrationProgress {
  * Raison de l'arrêt d'un parcours avant sa fin :
  * - `requested` : demande d'arrêt (bouton Arrêter, page BGA quittée) ;
  * - `windowClosed` : fenêtre Myludo dédiée fermée par l'utilisateur ;
- * - `myludoNotConnected`, `myludoPermissionMissing` : le statut sans cache ne peut plus être vérifié sur Myludo ;
- * - `consecutiveFailures` : trop d'échecs à la suite (Myludo ne répond plus, ou son formulaire a changé).
+ * - `consecutiveFailures` : trop d'échecs à la suite (Myludo ne répond plus, ou son formulaire a changé) ;
+ * - un problème de compte Myludo (`notConnected`, `permissionMissing`) : le statut sans cache ne peut plus être vérifié.
  */
-export type StopReason = "requested" | "windowClosed" | "myludoNotConnected" | "myludoPermissionMissing" | "consecutiveFailures";
+export type StopReason = "requested" | "windowClosed" | "consecutiveFailures" | MyludoAccountIssue;
 
 /** Récapitulatif final d'un parcours d'enregistrement. */
 export interface BulkRecap {

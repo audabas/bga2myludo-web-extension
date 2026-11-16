@@ -7,6 +7,7 @@ import type {
     RegistrationProgress,
     StopReason
 } from "~/core/bulkRegistration/types";
+import type { MyludoAccountIssue } from "~/core/registrationStatus/types";
 
 /** Marqueur du panneau (jamais la classe des liens Myludo : elle sert de garde d'injection des lignes). */
 export const BULK_REGISTRATION_PANEL_ATTRIBUTE = "data-myludo-bulk-registration";
@@ -22,7 +23,7 @@ const DISCARD_LABELS: Record<DiscardReason, string> = {
     gameUnavailable: "bulkRegistrationDiscardedGameUnavailableText"
 };
 
-const ACCOUNT_ISSUE_LABELS: Record<NonNullable<BulkAnalysis["myludoAccountIssue"]>, string> = {
+const ACCOUNT_ISSUE_LABELS: Record<MyludoAccountIssue, string> = {
     notConnected: "bulkRegistrationNotConnectedText",
     permissionMissing: "bulkRegistrationPermissionMissingText"
 };
@@ -30,8 +31,8 @@ const ACCOUNT_ISSUE_LABELS: Record<NonNullable<BulkAnalysis["myludoAccountIssue"
 const STOP_REASON_LABELS: Record<StopReason, string> = {
     requested: "bulkRegistrationStopRequestedText",
     windowClosed: "bulkRegistrationStopWindowClosedText",
-    myludoNotConnected: "bulkRegistrationStopNotConnectedText",
-    myludoPermissionMissing: "bulkRegistrationStopPermissionMissingText",
+    notConnected: "bulkRegistrationStopNotConnectedText",
+    permissionMissing: "bulkRegistrationStopPermissionMissingText",
     consecutiveFailures: "bulkRegistrationStopConsecutiveFailuresText"
 };
 

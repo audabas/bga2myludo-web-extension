@@ -1,5 +1,6 @@
 import { RegistrationStatusCache } from "./cache";
-import { candidateWindow, localEndDay } from "./localDay";
+import timeHelper from "~/core/helpers/timeHelper";
+import { candidateWindow } from "./localDay";
 import { findMatchingPlay } from "./matching";
 import { findPlayByTableNumber } from "./tableNumberFallback";
 import type {
@@ -89,7 +90,7 @@ export function createRegistrationStatus(deps: RegistrationStatusDependencies): 
                 return;
             }
 
-            pending.push({ table, myludoGameId, day: localEndDay(table.end) });
+            pending.push({ table, myludoGameId, day: timeHelper.toLocalDay(table.end) });
         });
 
         return pending;

@@ -1,7 +1,7 @@
 export default class timeHelper {
     /**
-     * Local calendar day (YYYY-MM-DD) of an instant, in the browser's time zone.
-     * Used for the local end day of a Table (not its UTC day).
+     * Jour calendaire local (AAAA-MM-JJ) d'un instant, dans le fuseau horaire du navigateur.
+     * Sert pour le jour local de fin d'une Table (et non son jour UTC).
      */
     static toLocalDay = (date: Date): string => {
         const year = date.getFullYear().toString().padStart(4, '0');

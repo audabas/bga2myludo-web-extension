@@ -2,7 +2,6 @@ import boardGameArenaHelper from "~/core/helpers/boardGameArenaHelper";
 import registrationStatusDisplayHelper from "~/core/helpers/registrationStatusDisplayHelper";
 import { createInvalidatedTables } from "~/core/registrationStatus/invalidatedTables";
 import type { RegistrationStatuses } from "~/core/registrationStatus/types";
-import configurationService from "~/core/services/configurationService";
 import gameStatsService from "~/core/services/gameStatsService";
 import lastResultsService from "~/core/services/lastResultsService";
 import registrationStatusService from "~/core/services/registrationStatusService";
@@ -24,8 +23,8 @@ export default defineContentScript({
         // désactivée, l'Historique BGA se comporte exactement comme avant (ni statut, ni observateur, ni écouteur)
         let showRegistrationStatus = false;
 
-        configurationService.get()
-            .then(configuration => { showRegistrationStatus = configuration.showRegistrationStatus === true; })
+        registrationStatusService.isHistoryEnabled()
+            .then(enabled => { showRegistrationStatus = enabled; })
             .catch(error => console.error("Error reading configuration:", error))
             .then(() => {
                 if (showRegistrationStatus) listenToTableLinks();

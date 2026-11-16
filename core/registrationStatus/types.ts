@@ -100,7 +100,7 @@ export interface Clock {
     now(): Date;
 }
 
-/** Stockage du cache (WXT `storage`, ou le stockage simulé en test). */
+/** Stockage du cache (WXT `storage`). */
 export type RegistrationStatusStorage = WxtStorage;
 
 /** Configuration utile au module, lue une fois par calcul. */

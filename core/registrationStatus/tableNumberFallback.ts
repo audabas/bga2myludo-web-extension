@@ -1,4 +1,5 @@
-import { candidateWindow, localEndDay } from "./localDay";
+import timeHelper from "~/core/helpers/timeHelper";
+import { candidateWindow } from "./localDay";
 import type { MyludoPlay, MyludoPlayDetails, RegistrationTable } from "./types";
 
 /** Résultat du repli : la Partie Myludo reconnue, sinon si un détail n'a pas pu être lu. */
@@ -25,7 +26,7 @@ export async function findPlayByTableNumber(
     plays: MyludoPlay[],
     getDetails: (playId: string) => Promise<MyludoPlayDetails | null>
 ): Promise<TableNumberFallbackResult> {
-    const { dateFrom, dateTo } = candidateWindow(localEndDay(table.end));
+    const { dateFrom, dateTo } = candidateWindow(timeHelper.toLocalDay(table.end));
     const candidates = plays.filter(play => play.hasComment && play.date >= dateFrom && play.date <= dateTo);
     let detailsFailed = false;
 

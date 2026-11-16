@@ -1,4 +1,5 @@
-import { candidateWindow, localEndDay } from "./localDay";
+import timeHelper from "~/core/helpers/timeHelper";
+import { candidateWindow } from "./localDay";
 import { normalizeTablePlayers } from "./players";
 import type { MyludoPlay, RegistrationStatusConfiguration, RegistrationTable } from "./types";
 
@@ -43,7 +44,7 @@ export function playersFingerprint(players: FingerprintPlayer[], ignoreScores: b
  * pour une Table abandonnée, la Partie Myludo doit de plus être marquée incomplète.
  */
 export function findMatchingPlay(table: RegistrationTable, plays: MyludoPlay[], configuration: RegistrationStatusConfiguration): MyludoPlay | undefined {
-    const { dateFrom, dateTo } = candidateWindow(localEndDay(table.end));
+    const { dateFrom, dateTo } = candidateWindow(timeHelper.toLocalDay(table.end));
     const tablePlayers = normalizeTablePlayers(table.players, configuration);
 
     return plays

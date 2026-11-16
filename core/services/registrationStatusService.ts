@@ -10,7 +10,8 @@ async function readConfiguration(): Promise<RegistrationStatusConfiguration> {
     const games = await configurationService.getGames();
 
     return {
-        enabled: configuration.showRegistrationStatus !== false,
+        // valeur par défaut appliquée par configurationService.get()
+        enabled: configuration.showRegistrationStatus === true,
         customCurrentPlayerName: configuration.customizeCurrentPlayer && configuration.customCurrentPlayerName
             ? configuration.customCurrentPlayerName
             : undefined,
@@ -43,7 +44,7 @@ const registrationStatusService = {
      */
     async isHistoryEnabled(): Promise<boolean> {
         const configuration = await configurationService.get();
-        return configuration.showRegistrationStatus !== false;
+        return configuration.showRegistrationStatus === true;
     }
 };
 

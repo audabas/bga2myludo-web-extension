@@ -1,13 +1,12 @@
 import documentHelper from "~/core/helpers/documentHelper";
-import myludoHelper from "~/core/helpers/myludoHelper";
 import timeHelper from "~/core/helpers/timeHelper";
 import type { Table } from "~/core/models/table";
 import boardGameArenaService from "~/core/services/boardGameArenaService";
 import configurationService from "~/core/services/configurationService";
+import registrationStatusService from "~/core/services/registrationStatusService";
 
 // Constants
 const CHECK_INTERVAL_MS = 125;
-const LOAD_PLAYS_INTERVAL_MS = 250;
 const SCROLL_DELAY_MS = 100;
 const MAX_RETRY_COUNT = 20; // Max 2.5 seconds (20 * 125ms)
 
@@ -184,152 +183,140 @@ export default defineContentScript({
                         current.name = overridenUser && overridenUser.myludoUser && overridenUser.myludoUser.length > 0 ? overridenUser.myludoUser : current.name;
                     });
 
-                    // même correspondance appliquée au snapshot d'origine, pour que la détection de doublon reste cohérente
-                    // avec l'historique Myludo même si renameAllOpponents/keepOnlyTopOpponent est aussi actif
-                    data.originalPlayers?.forEach(current => {
-                        const overridenUser = configuration.users.find(o => o.bgaUser === current.name);
-                        current.name = overridenUser && overridenUser.myludoUser && overridenUser.myludoUser.length > 0 ? overridenUser.myludoUser : current.name;
-                    });
+                    // même règle que le statut affiché dans l'Historique BGA, sur des données fraîches (sans cache) ;
+                    // un statut indéterminé se comporte comme s'il n'y avait pas de partie similaire
+                    const hasBeenPlayed = await isAlreadyRegistered(data);
 
-                    await loadPlays((plays => {
-                        // la détection de doublon doit se baser sur les noms d'origine (avant renameAllOpponents/keepOnlyTopOpponent),
-                        // sinon elle ne reconnaît plus les parties déjà saisies sur Myludo avec les vrais pseudos
-                        const hasBeenPlayed = myludoHelper.hasBeenAlreadyPlayed(
-                            { ...data, players: data.originalPlayers ?? data.players },
-                            plays
-                        );
+                    addPlayButton.item(0)!.click();
 
-                        addPlayButton.item(0)!.click();
+                    // Nettoyer l'URL maintenant qu'on a ouvert le formulaire
+                    cleanUrlFromBgaTableId();
 
-                        // Nettoyer l'URL maintenant qu'on a ouvert le formulaire
-                        cleanUrlFromBgaTableId();
+                    const intervalPopupID = setInterval(() => {
+                        const addPlayerButton = document.getElementsByClassName('btn-add-player') as HTMLCollectionOf<HTMLElement>;
 
-                        const intervalPopupID = setInterval(() => {
-                            const addPlayerButton = document.getElementsByClassName('btn-add-player') as HTMLCollectionOf<HTMLElement>;
+                        if (addPlayerButton.length > 0) {
+                            clearInterval(intervalPopupID);
 
-                            if (addPlayerButton.length > 0) {
-                                clearInterval(intervalPopupID);
+                            if (hasBeenPlayed) addWarning();
 
-                                if (hasBeenPlayed) addWarning();
+                            const onlineElement = document.getElementById('online');
+                            if (onlineElement) onlineElement.click();
 
-                                const onlineElement = document.getElementById('online');
-                                if (onlineElement) onlineElement.click();
-
-                                if (data.isAbandoned) {
-                                    const incompleteElement = document.getElementById('incomplete');
-                                    if (incompleteElement) incompleteElement.click();
-                                }
-
-                                if (data.duration) {
-                                    documentHelper.getFirstInputByName(`time`).value = data.duration.toString();
-                                    const hoursElement = document.getElementsByClassName(`counter-hours`)[0];
-                                    const minutesElement = document.getElementsByClassName(`counter-minutes`)[0];
-                                    if (hoursElement) hoursElement.textContent = Math.floor(data.duration / 60).toString().padStart(2, "0");
-                                    if (minutesElement) minutesElement.textContent = Math.floor(data.duration % 60).toString().padStart(2, "0");
-                                }
-
-                                if (data.isSolo) {
-                                    const soloElement = document.getElementById('solo');
-                                    if (soloElement) soloElement.click();
-
-                                    const score = data.players[0]?.score ?? 0;
-
-                                    if (score > 0) {
-                                        documentHelper.getFirstHtmlElementByQuery('.btn-winner-player').click();
-                                    }
-
-                                    documentHelper.getFirstHtmlElementByQuery(`label[for="name-0"]`).click();
-                                    documentHelper.getInputById(`name-0`).value = data.players[0]?.name ?? '';
-
-                                    documentHelper.getFirstHtmlElementByQuery(`label[for="score-0"]`).click();
-                                    documentHelper.getInputById(`score-0`).value = score.toString();
-                                } else if (data.isCooperative) {
-                                    const coopElement = document.getElementById('coop');
-                                    if (coopElement) coopElement.click();
-
-                                    const scoreCoop = data.players[0]?.score ?? 0;
-
-                                    documentHelper.getFirstHtmlElementByQuery(`label[for="coopscore"]`).click();
-                                    documentHelper.getInputById(`coopscore`).value = scoreCoop.toString();
-
-                                    if (scoreCoop > 0) {
-                                        documentHelper.getFirstHtmlElementByQuery('.btn-icon-switch').click();
-                                    }
-
-                                    data.players.forEach((elt, index) => {
-                                        const addPlayerBtn = addPlayerButton.item(0);
-                                        if (addPlayerBtn) {
-                                            addPlayerBtn.click();
-                                        }
-
-                                        documentHelper.getFirstHtmlElementByQuery(`label[for="name-${index}"]`).click();
-
-                                        const currentPlayer = documentHelper.getInputById(`name-${index}`);
-                                        currentPlayer.value = elt.name;
-
-                                        documentHelper.getFirstHtmlElementByQuery(`label[for="score-${index}"]`).click();
-                                        documentHelper.getInputById(`score-${index}`).value = elt.score ? elt.score.toString() : '';
-                                    });
-
-                                } else {
-                                    data.players.forEach((elt, index) => {
-                                        const addPlayerBtn = addPlayerButton.item(0);
-                                        if (addPlayerBtn) {
-                                            addPlayerBtn.click();
-                                        }
-
-                                        documentHelper.getFirstHtmlElementByQuery(`label[for="name-${index}"]`).click();
-
-                                        const currentPlayer = documentHelper.getInputById(`name-${index}`);
-                                        currentPlayer.value = elt.name;
-
-                                        if (elt.rank === 1) {
-                                            (currentPlayer.closest('.card-content')?.getElementsByClassName('btn-winner-player')[0] as HTMLElement)?.click();
-                                        }
-
-                                        documentHelper.getFirstHtmlElementByQuery(`label[for="score-${index}"]`).click();
-                                        documentHelper.getInputById(`score-${index}`).value = elt.score ? elt.score.toString() : '';
-                                    });
-                                }
-
-                                documentHelper.getInputById(`date`).value = timeHelper.toLocalDay(new Date(data.end));
-
-                                if (configuration.fillPlace) {
-                                    documentHelper.getFirstHtmlElementByQuery(`label[for="location"]`).click();
-                                    documentHelper.getInputById(`location`).value = configuration.place;
-                                }
-
-                                documentHelper.getFirstHtmlElementByQuery(`label[for="message"]`).click();
-                                let message = "";
-
-                                if (configuration.addTableLink) {
-                                    message += chrome.i18n.getMessage("tableLinkText").replace('#TABLE_ID#', data.tableId.toString());
-                                }
-
-                                message += chrome.i18n.getMessage("createdWithText");
-
-                                documentHelper.getInputById(`message`).value = message;
-
-                                if (configuration.excludeFromStatistics) {
-                                    const excludeElement = documentHelper.getInputById(`exclude`);
-                                    if (excludeElement) excludeElement.click();
-                                }
-
-                                if (configuration.autoSubmit && !hasBeenPlayed) {
-                                    documentHelper.getFirstHtmlElementByQuery(`#form-play button[type=submit]`).click();
-                                }
-                                else {
-                                    // Attendre que le DOM soit mis à jour avant de scroller
-                                    setTimeout(() => {
-                                        const modalContent = document.querySelector("#form-play .modal-content") as HTMLElement;
-                                        if (modalContent) {
-                                            modalContent.scrollTop = modalContent.scrollHeight;
-                                        }
-                                    }, SCROLL_DELAY_MS);
-                                }
+                            if (data.isAbandoned) {
+                                const incompleteElement = document.getElementById('incomplete');
+                                if (incompleteElement) incompleteElement.click();
                             }
-                        }, CHECK_INTERVAL_MS);
-                    }));
+
+                            if (data.duration) {
+                                documentHelper.getFirstInputByName(`time`).value = data.duration.toString();
+                                const hoursElement = document.getElementsByClassName(`counter-hours`)[0];
+                                const minutesElement = document.getElementsByClassName(`counter-minutes`)[0];
+                                if (hoursElement) hoursElement.textContent = Math.floor(data.duration / 60).toString().padStart(2, "0");
+                                if (minutesElement) minutesElement.textContent = Math.floor(data.duration % 60).toString().padStart(2, "0");
+                            }
+
+                            if (data.isSolo) {
+                                const soloElement = document.getElementById('solo');
+                                if (soloElement) soloElement.click();
+
+                                const score = data.players[0]?.score ?? 0;
+
+                                if (score > 0) {
+                                    documentHelper.getFirstHtmlElementByQuery('.btn-winner-player').click();
+                                }
+
+                                documentHelper.getFirstHtmlElementByQuery(`label[for="name-0"]`).click();
+                                documentHelper.getInputById(`name-0`).value = data.players[0]?.name ?? '';
+
+                                documentHelper.getFirstHtmlElementByQuery(`label[for="score-0"]`).click();
+                                documentHelper.getInputById(`score-0`).value = score.toString();
+                            } else if (data.isCooperative) {
+                                const coopElement = document.getElementById('coop');
+                                if (coopElement) coopElement.click();
+
+                                const scoreCoop = data.players[0]?.score ?? 0;
+
+                                documentHelper.getFirstHtmlElementByQuery(`label[for="coopscore"]`).click();
+                                documentHelper.getInputById(`coopscore`).value = scoreCoop.toString();
+
+                                if (scoreCoop > 0) {
+                                    documentHelper.getFirstHtmlElementByQuery('.btn-icon-switch').click();
+                                }
+
+                                data.players.forEach((elt, index) => {
+                                    const addPlayerBtn = addPlayerButton.item(0);
+                                    if (addPlayerBtn) {
+                                        addPlayerBtn.click();
+                                    }
+
+                                    documentHelper.getFirstHtmlElementByQuery(`label[for="name-${index}"]`).click();
+
+                                    const currentPlayer = documentHelper.getInputById(`name-${index}`);
+                                    currentPlayer.value = elt.name;
+
+                                    documentHelper.getFirstHtmlElementByQuery(`label[for="score-${index}"]`).click();
+                                    documentHelper.getInputById(`score-${index}`).value = elt.score ? elt.score.toString() : '';
+                                });
+
+                            } else {
+                                data.players.forEach((elt, index) => {
+                                    const addPlayerBtn = addPlayerButton.item(0);
+                                    if (addPlayerBtn) {
+                                        addPlayerBtn.click();
+                                    }
+
+                                    documentHelper.getFirstHtmlElementByQuery(`label[for="name-${index}"]`).click();
+
+                                    const currentPlayer = documentHelper.getInputById(`name-${index}`);
+                                    currentPlayer.value = elt.name;
+
+                                    if (elt.rank === 1) {
+                                        (currentPlayer.closest('.card-content')?.getElementsByClassName('btn-winner-player')[0] as HTMLElement)?.click();
+                                    }
+
+                                    documentHelper.getFirstHtmlElementByQuery(`label[for="score-${index}"]`).click();
+                                    documentHelper.getInputById(`score-${index}`).value = elt.score ? elt.score.toString() : '';
+                                });
+                            }
+
+                            documentHelper.getInputById(`date`).value = timeHelper.toLocalDay(new Date(data.end));
+
+                            if (configuration.fillPlace) {
+                                documentHelper.getFirstHtmlElementByQuery(`label[for="location"]`).click();
+                                documentHelper.getInputById(`location`).value = configuration.place;
+                            }
+
+                            documentHelper.getFirstHtmlElementByQuery(`label[for="message"]`).click();
+                            let message = "";
+
+                            if (configuration.addTableLink) {
+                                message += chrome.i18n.getMessage("tableLinkText").replace('#TABLE_ID#', data.tableId.toString());
+                            }
+
+                            message += chrome.i18n.getMessage("createdWithText");
+
+                            documentHelper.getInputById(`message`).value = message;
+
+                            if (configuration.excludeFromStatistics) {
+                                const excludeElement = documentHelper.getInputById(`exclude`);
+                                if (excludeElement) excludeElement.click();
+                            }
+
+                            if (configuration.autoSubmit && !hasBeenPlayed) {
+                                documentHelper.getFirstHtmlElementByQuery(`#form-play button[type=submit]`).click();
+                            }
+                            else {
+                                // Attendre que le DOM soit mis à jour avant de scroller
+                                setTimeout(() => {
+                                    const modalContent = document.querySelector("#form-play .modal-content") as HTMLElement;
+                                    if (modalContent) {
+                                        modalContent.scrollTop = modalContent.scrollHeight;
+                                    }
+                                }, SCROLL_DELAY_MS);
+                            }
+                        }
+                    }, CHECK_INTERVAL_MS);
                 }
             } catch (error) {
                 console.error("Error in patch function:", error);
@@ -381,46 +368,17 @@ export default defineContentScript({
         }
 
 
-        async function loadPlays(callback: (tables: Table[]) => void) {
-            const tables: Table[] = [];
-
-            const playsTab = document.querySelector<HTMLElement>('a[data-target="plays"]');
-
-            if (playsTab) {
-                playsTab.click();
-
-                const intervalLoadPlaysID = setInterval(() => {
-                    const loadingPlays = document.querySelector('#plays .progress');
-
-                    if (!loadingPlays) {
-                        clearInterval(intervalLoadPlaysID);
-
-                        const playsContent = document.querySelectorAll('#plays .game-play');
-
-                        playsContent.forEach((currentPlay) => {
-                            const table = {
-                                end: myludoHelper.convertToDate(currentPlay.querySelector('h4')?.textContent ?? ''),
-                                duration: Number(currentPlay.querySelector('h5 strong')?.textContent),
-                                players: []
-                            } as unknown as Table;
-
-                            currentPlay.querySelectorAll('.play-player').forEach((elt) => {
-                                const counter = elt.querySelector('.counter');
-                                table.players.push({
-                                    name: elt.getAttribute('title') ?? '',
-                                    score: counter ? Number(counter.textContent) : undefined
-                                })
-                            });
-
-                            tables.push(table);
-                        });
-
-                        callback(tables);
-                    }
-                }, LOAD_PLAYS_INTERVAL_MS);
-            }
-            else {
-                callback(tables);
+        /** Vrai si la Table est déjà enregistrée sur Myludo (module Statut d'enregistrement, sans cache). */
+        async function isAlreadyRegistered(table: Table): Promise<boolean> {
+            try {
+                const statuses = await registrationStatusService.getStatuses(
+                    [boardGameArenaService.toRegistrationTable(table)],
+                    { useCache: false }
+                );
+                return statuses.get(String(table.tableId))?.kind === "registered";
+            } catch (error) {
+                console.error("Failed to compute Myludo registration status:", error);
+                return false;
             }
         }
 

@@ -5,6 +5,7 @@ import type { Friend } from "~/core/models/boardGameArena/friendsResponse";
 import type { Player } from "~/core/models/player";
 import type { Table } from "~/core/models/table";
 import type { PlayerElement } from "~/core/models/boardGameArena/tableInfosResponse";
+import type { RegistrationTable } from "~/core/registrationStatus/types";
 import configurationService from "./configurationService";
 
 export default class boardGameArenaService {
@@ -39,10 +40,17 @@ export default class boardGameArenaService {
         };
 
         let currentPlayerIndex = -1;
+        // joueurs tels qu'ils apparaissent sur BGA, pour le Statut d'enregistrement
+        // (le module applique lui-même nom personnalisé et correspondances de joueurs)
+        const originalPlayers: Player[] = [];
 
         response.data.result.player.forEach((item: PlayerElement) => {
             let playerName = item.name;
             const isCurrentPlayer = playerName === connectedUser.nickname;
+            const score = item.score ? Number(item.score) : undefined;
+            const rank = item.gamerank ? Number(item.gamerank) : undefined;
+
+            originalPlayers.push({ name: item.name, score, rank, isCurrentPlayer });
 
             if (isCurrentPlayer &&
                 configuration.customizeCurrentPlayer &&
@@ -52,15 +60,10 @@ export default class boardGameArenaService {
 
             if (isCurrentPlayer) currentPlayerIndex = table.players.length;
 
-            table.players.push({
-                name: playerName,
-                score: item.score ? Number(item.score) : undefined,
-                rank: item.gamerank ? Number(item.gamerank) : undefined
-            });
+            table.players.push({ name: playerName, score, rank, isCurrentPlayer });
         });
 
-        // snapshot avant renommage/filtrage, pour que la détection de doublon Myludo reste fiable
-        table.originalPlayers = table.players.map(p => ({ ...p }));
+        table.originalPlayers = originalPlayers;
 
         if (configuration.keepOnlyTopOpponent &&
             !table.isSolo &&
@@ -104,6 +107,28 @@ export default class boardGameArenaService {
         }
 
         return table;
+    }
+
+    /** Table normalisée pour le module Statut d'enregistrement, à partir des données du préremplissage. */
+    static toRegistrationTable(table: Table): RegistrationTable {
+        const players = table.originalPlayers ?? table.players;
+
+        return {
+            tableId: String(table.tableId),
+            bgaGameId: table.gameId,
+            // time_end arrive en chaîne JSON malgré le type
+            end: new Date(table.end),
+            players: players.map(player => ({
+                name: player.name,
+                // comme dans l'Historique BGA : une Table abandonnée n'a ni scores ni rangs
+                score: table.isAbandoned ? undefined : player.score,
+                rank: table.isAbandoned ? undefined : player.rank,
+                isCurrentPlayer: player.isCurrentPlayer ?? false
+            })),
+            isCooperative: Boolean(table.isCooperative),
+            isSolo: Boolean(table.isSolo),
+            isAbandoned: Boolean(table.isAbandoned)
+        };
     }
 
     static async getFriends(): Promise<Friend[]> {

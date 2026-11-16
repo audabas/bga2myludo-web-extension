@@ -3,7 +3,7 @@ import type { Player } from "./player";
 export class Table {
     tableId!: string;
     players!: Player[];
-    // snapshot des joueurs avant renommage/filtrage par renameAllOpponents ou keepOnlyTopOpponent, utilisé pour la détection de doublon sur Myludo
+    // joueurs tels qu'ils apparaissent sur BGA (pseudos BGA, avant nom personnalisé, renommage ou filtrage), utilisés pour le Statut d'enregistrement
     originalPlayers?: Player[];
     end!: Date;
     isCooperative!: boolean;

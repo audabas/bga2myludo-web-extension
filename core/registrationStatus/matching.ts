@@ -39,7 +39,8 @@ export function playersFingerprint(players: FingerprintPlayer[], ignoreScores: b
 
 /**
  * Règle de correspondance Table ↔ Partie Myludo (les Parties Myludo sont celles de la fiche de jeu de la Table) :
- * jour de la partie dans [J-1, J+1] et même empreinte pseudos/scores.
+ * jour de la partie dans [J-1, J+1] et même empreinte pseudos/scores ;
+ * pour une Table abandonnée, la Partie Myludo doit de plus être marquée incomplète.
  */
 export function findMatchingPlay(table: RegistrationTable, plays: MyludoPlay[], configuration: RegistrationStatusConfiguration): MyludoPlay | undefined {
     const { dateFrom, dateTo } = candidateWindow(localEndDay(table.end));
@@ -48,6 +49,7 @@ export function findMatchingPlay(table: RegistrationTable, plays: MyludoPlay[], 
     return plays
         .filter(play => play.date >= dateFrom && play.date <= dateTo)
         .find(play => {
+            if (table.isAbandoned && !play.incomplete) return false;
             const ignoreScores = table.isCooperative || play.coop;
             return playersFingerprint(tablePlayers, ignoreScores) === playersFingerprint(play.players, ignoreScores);
         });

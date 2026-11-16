@@ -66,9 +66,11 @@ export default class gameStatsService {
         const ids = splitList(table.players);
         if (!ids.includes(String(connectedUserId))) return null;
 
+        const isAbandoned = table.normalend === "0";
         const names = splitList(table.player_names);
-        const scores = splitList(table.scores);
-        const ranks = splitList(table.ranks);
+        // une Table abandonnée n'a ni scores ni rangs
+        const scores = isAbandoned ? [] : splitList(table.scores);
+        const ranks = isAbandoned ? [] : splitList(table.ranks);
 
         return {
             tableId: String(table.table_id),
@@ -83,7 +85,7 @@ export default class gameStatsService {
             // getGames n'indique pas si le jeu est coopératif : la règle s'appuie alors sur la Partie Myludo
             isCooperative: false,
             isSolo: ids.length === 1,
-            isAbandoned: table.normalend === "0"
+            isAbandoned
         };
     }
 

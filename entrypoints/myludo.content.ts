@@ -1,5 +1,6 @@
 import documentHelper from "~/core/helpers/documentHelper";
 import myludoHelper from "~/core/helpers/myludoHelper";
+import timeHelper from "~/core/helpers/timeHelper";
 import type { Table } from "~/core/models/table";
 import boardGameArenaService from "~/core/services/boardGameArenaService";
 import configurationService from "~/core/services/configurationService";
@@ -291,7 +292,7 @@ export default defineContentScript({
                                     });
                                 }
 
-                                documentHelper.getInputById(`date`).value = new Date(data.end).toISOString().split('T')[0]!;
+                                documentHelper.getInputById(`date`).value = timeHelper.toLocalDay(new Date(data.end));
 
                                 if (configuration.fillPlace) {
                                     documentHelper.getFirstHtmlElementByQuery(`label[for="location"]`).click();

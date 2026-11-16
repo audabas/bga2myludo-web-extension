@@ -2,6 +2,7 @@ import boardGameArenaHelper from "~/core/helpers/boardGameArenaHelper";
 import registrationStatusDisplayHelper from "~/core/helpers/registrationStatusDisplayHelper";
 import { createInvalidatedTables } from "~/core/registrationStatus/invalidatedTables";
 import type { RegistrationStatuses } from "~/core/registrationStatus/types";
+import configurationService from "~/core/services/configurationService";
 import gameStatsService from "~/core/services/gameStatsService";
 import lastResultsService from "~/core/services/lastResultsService";
 import registrationStatusService from "~/core/services/registrationStatusService";
@@ -19,13 +20,39 @@ export default defineContentScript({
         // Tables dont le lien a été cliqué : revérifiées au retour sur l'onglet
         const invalidatedTables = createInvalidatedTables(registrationStatusService);
 
-        document.addEventListener("click", invalidateClickedTable, true);
-        document.addEventListener("auxclick", invalidateClickedTable, true);
-        document.addEventListener("visibilitychange", () => {
-            if (document.visibilityState === "visible") refreshInvalidatedStatuses();
-        });
+        // option « Afficher le statut Myludo dans l'historique BGA », lue une fois au chargement de la page :
+        // désactivée, l'Historique BGA se comporte exactement comme avant (ni statut, ni observateur, ni écouteur)
+        let showRegistrationStatus = false;
 
-        patch();
+        configurationService.get()
+            .then(configuration => { showRegistrationStatus = configuration.showRegistrationStatus === true; })
+            .catch(error => console.error("Error reading configuration:", error))
+            .then(() => {
+                if (showRegistrationStatus) listenToTableLinks();
+                patch();
+            });
+
+        /** Clics sur les liens Myludo et retour sur l'onglet (invalidation des Statuts d'enregistrement). */
+        function listenToTableLinks() {
+            document.addEventListener("click", invalidateClickedTable, true);
+            document.addEventListener("auxclick", invalidateClickedTable, true);
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === "visible") refreshInvalidatedStatuses();
+            });
+        }
+
+        /** Relit les lignes quand le conteneur change : les lignes de « Voir plus » peuvent arriver après le délai de lecture. */
+        function observeNewRows(containerId: string, feed: () => void) {
+            const container = document.getElementById(containerId);
+            if (!container || container.hasAttribute('data-myludo-observer')) return;
+
+            container.setAttribute('data-myludo-observer', 'true');
+            let debounce: ReturnType<typeof setTimeout> | undefined;
+            new MutationObserver(() => {
+                clearTimeout(debounce);
+                debounce = setTimeout(feed, 250);
+            }).observe(container, { childList: true, subtree: true });
+        }
 
         /** Clic (ou clic molette) sur le lien Myludo d'une Table : son Statut d'enregistrement est invalidé. */
         function invalidateClickedTable(event: MouseEvent) {
@@ -155,16 +182,7 @@ export default defineContentScript({
                 });
             }
 
-            // les lignes de « Voir plus » peuvent arriver après le délai de fetchAndFeedLastResultsPage
-            const boardPosts = document.getElementById("boardposts_r");
-            if (boardPosts && !boardPosts.hasAttribute('data-myludo-observer')) {
-                boardPosts.setAttribute('data-myludo-observer', 'true');
-                let debounce: ReturnType<typeof setTimeout> | undefined;
-                new MutationObserver(() => {
-                    clearTimeout(debounce);
-                    debounce = setTimeout(() => fetchAndFeedLastResultsPage(page), 250);
-                }).observe(boardPosts, { childList: true, subtree: true });
-            }
+            if (showRegistrationStatus) observeNewRows("boardposts_r", () => fetchAndFeedLastResultsPage(page));
         }
 
         function updateLastResultsStatuses() {
@@ -182,8 +200,8 @@ export default defineContentScript({
                     const post = row.closest('.post');
                     if (!post) continue;
 
-                    // seuls les résultats de partie sont traités (pas les trophées ni les autres entrées)
-                    if (!post.querySelector('.board-score-entry')) continue;
+                    // avec le statut, seuls les résultats de partie sont traités (pas les trophées ni les autres entrées)
+                    if (showRegistrationStatus && !post.querySelector('.board-score-entry')) continue;
 
                     const linkElement = post.querySelector('a[href*="/table?table="]');
                     const gameIcon = post.querySelector('.game_icon');
@@ -204,8 +222,8 @@ export default defineContentScript({
                             try {
                                 const link = await boardGameArenaHelper.getMyLudoLink(tableId, gameId);
                                 span.appendChild(link);
-                                // une autre passe a pu traiter la ligne pendant l'attente
-                                if (!row.querySelector(`a.${myLudoEltId}`)) {
+                                // avec l'observateur, une autre passe a pu traiter la ligne pendant l'attente
+                                if (!showRegistrationStatus || !row.querySelector(`a.${myLudoEltId}`)) {
                                     row.appendChild(span);
                                 }
                             } catch (error) {
@@ -215,7 +233,7 @@ export default defineContentScript({
                     }
                 }
 
-                updateLastResultsStatuses();
+                if (showRegistrationStatus) updateLastResultsStatuses();
 
                 clearTimeout(timeout);
             }, 125);
@@ -242,16 +260,7 @@ export default defineContentScript({
                 });
             }
 
-            // les lignes de « Voir plus » peuvent arriver après le délai de fetchAndFeedStatsPage
-            const gameList = document.getElementById("gamelist_inner");
-            if (gameList && !gameList.hasAttribute('data-myludo-observer')) {
-                gameList.setAttribute('data-myludo-observer', 'true');
-                let debounce: ReturnType<typeof setTimeout> | undefined;
-                new MutationObserver(() => {
-                    clearTimeout(debounce);
-                    debounce = setTimeout(() => fetchAndFeedStatsPage(page), 250);
-                }).observe(gameList, { childList: true, subtree: true });
-            }
+            if (showRegistrationStatus) observeNewRows("gamelist_inner", () => fetchAndFeedStatsPage(page));
         }
 
         function updateGameStatsStatuses() {
@@ -287,8 +296,8 @@ export default defineContentScript({
                         cell.appendChild(link);
 
                         const targetRow = document.querySelector(`#gamelist_inner a[href="/table?table=${tableId}"]`)?.closest("tr");
-                        // une autre passe a pu traiter la ligne pendant l'attente
-                        if (targetRow && !targetRow.querySelector(`a.${myLudoEltId}`)) {
+                        // avec l'observateur, une autre passe a pu traiter la ligne pendant l'attente
+                        if (targetRow && (!showRegistrationStatus || !targetRow.querySelector(`a.${myLudoEltId}`))) {
                             targetRow.appendChild(cell);
                         }
                     } catch (error) {
@@ -296,7 +305,7 @@ export default defineContentScript({
                     }
                 }
 
-                updateGameStatsStatuses();
+                if (showRegistrationStatus) updateGameStatsStatuses();
 
                 clearTimeout(timeout);
             }, 125);

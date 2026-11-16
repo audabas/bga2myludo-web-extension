@@ -4,7 +4,7 @@ import bulkRegistrationDisplayHelper from "~/core/helpers/bulkRegistrationDispla
 import registrationStatusDisplayHelper from "~/core/helpers/registrationStatusDisplayHelper";
 import { createInvalidatedTables } from "~/core/registrationStatus/invalidatedTables";
 import type { RegistrationStatuses } from "~/core/registrationStatus/types";
-import bulkRegistrationService from "~/core/services/bulkRegistrationService";
+import bulkRegistrationService, { type BulkRegistrationPage } from "~/core/services/bulkRegistrationService";
 import gameStatsService from "~/core/services/gameStatsService";
 import lastResultsService from "~/core/services/lastResultsService";
 import registrationStatusService from "~/core/services/registrationStatusService";
@@ -99,27 +99,78 @@ export default defineContentScript({
             return new URLSearchParams(window.location.search).get("id");
         }
 
-        // panneau de l'Enregistrement groupé : URL pour laquelle il a été préparé (panneau null : pas de bouton)
-        let bulkPanel: { href: string; panel: HTMLElement | null } | null = null;
+        /** Page d'Historique BGA qui propose l'Enregistrement groupé. */
+        interface BulkHistoryPage {
+            matches: RegExp;
+            /** élément avant lequel le panneau est inséré (null : liste pas encore affichée) */
+            anchor(): Element | null;
+            /**
+             * Identité de la page affichée : un changement vaut changement de page (nouveau panneau, arrêt du parcours).
+             * BGA navigue en partie sans recharger la page (ni ce script) ; l'ancre n'en fait jamais partie.
+             */
+            pageKey(): string;
+            prepare(): Promise<BulkRegistrationPage>;
+            /** libellé du plafond de lecture atteint */
+            pageCapTextKey: string;
+        }
+
+        const bulkHistoryPages: BulkHistoryPage[] = [
+            {
+                // au-dessus de la liste des Tables ; les filtres de l'URL définissent le périmètre
+                matches: regexpGameStatsPage,
+                anchor: () => {
+                    const list = document.getElementById("gamelist_inner");
+                    return list?.closest("table") ?? list;
+                },
+                pageKey: () => window.location.href.split("#")[0]!,
+                prepare: () => bulkRegistrationService.forGameStats(),
+                pageCapTextKey: "bulkRegistrationPageCapText"
+            },
+            {
+                // au-dessus du fil (hors du conteneur observé pour « Voir plus ») ; seuls le joueur et la section
+                // désignent la page : un autre paramètre ajouté par BGA (« Voir plus »…) n'arrête pas le parcours
+                matches: regexpLastResultsPage,
+                anchor: () => document.getElementById("boardposts_r"),
+                pageKey: () => {
+                    const params = new URLSearchParams(window.location.search);
+                    return `${window.location.origin}${window.location.pathname}?id=${params.get("id") ?? ""}&section=${params.get("section") ?? ""}`;
+                },
+                prepare: () => bulkRegistrationService.forLastResults(),
+                pageCapTextKey: "bulkRegistrationPageCapLastResultsText"
+            }
+        ];
+
+        // panneau de l'Enregistrement groupé : page pour laquelle il a été préparé (panneau null : pas de bouton)
+        let bulkPanel: { page: BulkHistoryPage; key: string; panel: HTMLElement | null } | null = null;
         let bulkPanelPending = false;
 
-        /** Injecte (une fois par URL) le panneau de l'Enregistrement groupé au-dessus de la liste des Tables. */
-        async function injectGameStatsBulkRegistration() {
+        /**
+         * Injecte (une fois par page) le panneau de l'Enregistrement groupé au-dessus de la liste des Tables.
+         * Hors des pages d'Historique BGA, un panneau resté affiché est retiré (ce qui arrête un parcours en cours).
+         */
+        async function injectBulkRegistration() {
             if (bulkPanelPending) return;
 
-            const href = window.location.href;
-            if (bulkPanel && bulkPanel.href === href && (bulkPanel.panel === null || bulkPanel.panel.isConnected)) return;
+            const page = bulkHistoryPages.find(candidate => candidate.matches.test(window.location.href));
+            if (!page) {
+                bulkPanel?.panel?.remove();
+                bulkPanel = null;
+                return;
+            }
 
-            const list = document.getElementById("gamelist_inner");
-            const anchor = list?.closest("table") ?? list;
+            const key = page.pageKey();
+            if (bulkPanel && bulkPanel.page === page && bulkPanel.key === key
+                && (bulkPanel.panel === null || bulkPanel.panel.isConnected)) return;
+
+            const anchor = page.anchor();
             if (!anchor?.parentElement) return;
 
             bulkPanelPending = true;
             try {
                 bulkPanel?.panel?.remove();
-                const { availability, module } = await bulkRegistrationService.forGameStats();
+                const { availability, module } = await page.prepare();
                 const panel = bulkRegistrationDisplayHelper.createPanel(availability, () => {
-                    if (module && panel) analyseForBulkRegistration(panel, module);
+                    if (module && panel) analyseForBulkRegistration(panel, module, page);
                 });
                 if (panel && !anchor.isConnected) {
                     // la liste a été redessinée pendant la préparation : on réessaie au prochain passage
@@ -127,10 +178,10 @@ export default defineContentScript({
                     return;
                 }
                 if (panel) anchor.parentElement?.insertBefore(panel, anchor);
-                bulkPanel = { href, panel };
+                bulkPanel = { page, key, panel };
             } catch (error) {
                 console.error("Error preparing Myludo bulk registration:", error);
-                bulkPanel = { href, panel: null };
+                bulkPanel = { page, key, panel: null };
             } finally {
                 bulkPanelPending = false;
             }
@@ -140,15 +191,15 @@ export default defineContentScript({
          * Analyse de l'Enregistrement groupé : rien n'est écrit sur Myludo, le résultat s'affiche dans le panneau.
          * S'il y a des Tables à enregistrer, l'enregistrement est proposé, à confirmer dans la page.
          */
-        async function analyseForBulkRegistration(panel: HTMLElement, module: BulkRegistrationModule) {
+        async function analyseForBulkRegistration(panel: HTMLElement, module: BulkRegistrationModule, page: BulkHistoryPage) {
             bulkRegistrationDisplayHelper.setBusy(panel, true);
             bulkRegistrationDisplayHelper.showAnalysing(panel, 0);
             try {
                 const analysis = await module.analyse(progress => bulkRegistrationDisplayHelper.showAnalysing(panel, progress.tablesRead));
-                bulkRegistrationDisplayHelper.showAnalysis(panel, analysis);
+                bulkRegistrationDisplayHelper.showAnalysis(panel, analysis, page.pageCapTextKey);
                 if (analysis.toRegister.length > 0) {
                     bulkRegistrationDisplayHelper.showConfirmation(panel, analysis.toRegister.length, () => {
-                        registerForBulkRegistration(panel, module, analysis);
+                        registerForBulkRegistration(panel, module, analysis, page);
                     });
                 }
             } catch (error) {
@@ -159,11 +210,6 @@ export default defineContentScript({
             }
         }
 
-        /** Page affichée, sans l'ancre : BGA navigue en partie sans recharger la page (ni ce script). */
-        function currentPage(): string {
-            return window.location.href.split("#")[0]!;
-        }
-
         /**
          * Enregistrement des Tables analysées, une à une dans la fenêtre Myludo dédiée : progression dans le panneau,
          * bouton Arrêter, lignes affichées passées à « Enregistrée sur Myludo » au fil de l'eau, puis récapitulatif.
@@ -171,12 +217,17 @@ export default defineContentScript({
          * (le script de fond ferme alors la fenêtre Myludo), et une navigation sans rechargement est repérée ici.
          * Si BGA retire le panneau de la page, le parcours s'arrête aussi : il ne continue jamais sans affichage.
          */
-        async function registerForBulkRegistration(panel: HTMLElement, module: BulkRegistrationModule, analysis: BulkAnalysis) {
+        async function registerForBulkRegistration(
+            panel: HTMLElement,
+            module: BulkRegistrationModule,
+            analysis: BulkAnalysis,
+            page: BulkHistoryPage
+        ) {
             bulkRegistrationDisplayHelper.setBusy(panel, true);
             bulkRegistrationDisplayHelper.showStopButton(panel, () => module.stop());
-            const page = currentPage();
+            const key = page.pageKey();
             const pageWatcher = setInterval(() => {
-                if (currentPage() !== page || !panel.isConnected) module.stop();
+                if (!page.matches.test(window.location.href) || page.pageKey() !== key || !panel.isConnected) module.stop();
             }, 250);
             try {
                 const recap = await module.register(analysis, progress => {
@@ -201,9 +252,7 @@ export default defineContentScript({
 
         async function patch() {
             // l'Enregistrement groupé dépend du statut Myludo ; le panneau n'est pas un lien Myludo de ligne
-            if (showRegistrationStatus && window.top === window && regexpGameStatsPage.test(window.location.href)) {
-                injectGameStatsBulkRegistration();
-            }
+            if (showRegistrationStatus && window.top === window) injectBulkRegistration();
 
             if (document.getElementsByClassName(myLudoEltId).length === 0) {
                 if (regexTablePage.test(window.location.href)) {

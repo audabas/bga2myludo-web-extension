@@ -9,6 +9,7 @@ import { openPortFormDriver } from "./bulkRegistrationFormDriver";
 import configurationService from "./configurationService";
 import gameStatsService from "./gameStatsService";
 import type { HistoryFeed } from "./historySource";
+import lastResultsService from "./lastResultsService";
 import registrationStatusService from "./registrationStatusService";
 
 const systemClock: BulkClock = {
@@ -50,36 +51,58 @@ export interface BulkRegistrationPage {
     module?: BulkRegistrationModule;
 }
 
+/**
+ * Bouton et module d'une page d'Historique BGA. `displayedPlayerParam` est le paramètre de l'URL qui désigne
+ * le joueur affiché ; `feedOpener` prépare, pour le joueur connecté, l'ouverture du fil de la page (rappelée à chaque analyse).
+ * Statut Myludo désactivé : aucun appel (ni BGA ni Myludo).
+ */
+async function forHistoryPage(
+    displayedPlayerParam: string,
+    feedOpener: (connectedUser: User) => () => BulkHistoryFeed
+): Promise<BulkRegistrationPage> {
+    const configuration = await configurationService.get();
+    if (configuration.showRegistrationStatus !== true) return { availability: { kind: "hidden" } };
+
+    const connectedUser: User | null = await boardGameArenaService.isConnected().then(user => user || null);
+    const displayedPlayer = new URLSearchParams(window.location.search).get(displayedPlayerParam);
+    const availability = bulkRegistrationAvailability(
+        configuration,
+        displayedPlayer,
+        connectedUser?.id ?? null,
+        await canOpenWindows()
+    );
+    if (availability.kind !== "enabled" || !connectedUser) return { availability };
+
+    const module = createBulkRegistration({
+        openFeed: feedOpener(connectedUser),
+        statuses: registrationStatusService,
+        clock: systemClock,
+        openFormDriver: openPortFormDriver
+    });
+
+    return { availability, module };
+}
+
 export default class bulkRegistrationService {
-    /**
-     * Enregistrement groupé de « Statistiques de jeu », dans le périmètre des filtres de l'URL courante.
-     * Statut Myludo désactivé : aucun appel (ni BGA ni Myludo).
-     */
-    static async forGameStats(): Promise<BulkRegistrationPage> {
-        const configuration = await configurationService.get();
-        if (configuration.showRegistrationStatus !== true) return { availability: { kind: "hidden" } };
-
-        const connectedUser: User | null = await boardGameArenaService.isConnected().then(user => user || null);
-        const displayedPlayer = new URLSearchParams(window.location.search).get("player");
-        const availability = bulkRegistrationAvailability(
-            configuration,
-            displayedPlayer,
-            connectedUser?.id ?? null,
-            await canOpenWindows()
-        );
-        if (availability.kind !== "enabled" || !connectedUser) return { availability };
-
-        const search = gameStatsService.currentFilters(connectedUser);
-        const module = createBulkRegistration({
-            openFeed: () => normalizedFeed(
+    /** Enregistrement groupé de « Statistiques de jeu », dans le périmètre des filtres de l'URL courante. */
+    static forGameStats(): Promise<BulkRegistrationPage> {
+        return forHistoryPage("player", connectedUser => {
+            const search = gameStatsService.currentFilters(connectedUser);
+            return () => normalizedFeed(
                 gameStatsService.openFeed(search),
                 table => gameStatsService.toRegistrationTable(table, connectedUser.id)
-            ),
-            statuses: registrationStatusService,
-            clock: systemClock,
-            openFormDriver: openPortFormDriver
+            );
         });
+    }
 
-        return { availability, module };
+    /**
+     * Enregistrement groupé de « Derniers résultats » : tout le fil `message/board` des résultats de partie
+     * du joueur connecté (le bouton n'apparaît que sur sa propre page, sans `id` ou avec le sien).
+     */
+    static forLastResults(): Promise<BulkRegistrationPage> {
+        return forHistoryPage("id", connectedUser => () => normalizedFeed(
+            lastResultsService.openFeed(String(connectedUser.id)),
+            news => lastResultsService.toRegistrationTable(news, connectedUser.id)
+        ));
     }
 }

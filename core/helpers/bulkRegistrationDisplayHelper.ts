@@ -141,7 +141,8 @@ export default class bulkRegistrationDisplayHelper {
             : `${Object.values(discarded).reduce((sum, ids) => sum + ids.length, 0)} (${reasons.join(", ")})`;
     }
 
-    static showAnalysis(panel: HTMLElement, analysis: BulkAnalysis) {
+    /** Résultat de l'analyse ; `pageCapTextKey` est le libellé du plafond atteint, propre à la page (filtres ou non). */
+    static showAnalysis(panel: HTMLElement, analysis: BulkAnalysis, pageCapTextKey = "bulkRegistrationPageCapText") {
         const lines = [message("bulkRegistrationAnalysisText", {
             TO_REGISTER: analysis.toRegister.length,
             DISCARDED: bulkRegistrationDisplayHelper.discardedText(analysis.discarded),
@@ -150,7 +151,7 @@ export default class bulkRegistrationDisplayHelper {
 
         if (analysis.myludoAccountIssue === "notConnected") lines.push(message("bulkRegistrationNotConnectedText"));
         if (analysis.myludoAccountIssue === "permissionMissing") lines.push(message("bulkRegistrationPermissionMissingText"));
-        if (analysis.feedEnd === "pageCap") lines.push(message("bulkRegistrationPageCapText", { COUNT: analysis.tablesRead }));
+        if (analysis.feedEnd === "pageCap") lines.push(message(pageCapTextKey, { COUNT: analysis.tablesRead }));
         if (analysis.feedEnd === "error") lines.push(message("bulkRegistrationFeedErrorText"));
 
         bulkRegistrationDisplayHelper.showText(panel, lines.join("\n"));

@@ -335,6 +335,9 @@
     "bulkRegistrationPageCapText": {
         "message": "Historique trop long : seules les #COUNT# Tables les plus récentes ont été analysées. Restreignez la période ou le jeu avec les filtres de la page."
     },
+    "bulkRegistrationPageCapLastResultsText": {
+        "message": "Historique trop long : seules les #COUNT# Tables les plus récentes ont été analysées. Pour les plus anciennes, utilisez « Statistiques de jeu », dont les filtres restreignent la période ou le jeu."
+    },
     "bulkRegistrationFeedErrorText": {
         "message": "BGA n'a pas répondu comme prévu : l'analyse est incomplète. Réessayez plus tard."
     },

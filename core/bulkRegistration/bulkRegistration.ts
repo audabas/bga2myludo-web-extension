@@ -100,6 +100,8 @@ export function createBulkRegistration(deps: BulkRegistrationDependencies): Bulk
                 feedEnd: "complete"
             };
 
+            // une Table déjà lue n'est comptée qu'une fois (curseur qui n'avance plus, liste décalée par une nouvelle partie)
+            const seen = new Set<string>();
             const feed = deps.openFeed();
             for (let pagesRead = 0; pagesRead < BULK_MAX_PAGES; pagesRead++) {
                 const page = await feed();
@@ -108,9 +110,10 @@ export function createBulkRegistration(deps: BulkRegistrationDependencies): Bulk
                     return analysis;
                 }
 
-                const statuses = await deps.statuses.getStatuses(page.tables);
-                page.tables.forEach(table => classify(analysis, table, statuses.get(table.tableId)));
-                analysis.tablesRead += page.tables.length;
+                const tables = page.tables.filter(table => !seen.has(table.tableId) && seen.add(table.tableId));
+                const statuses = tables.length > 0 ? await deps.statuses.getStatuses(tables) : new Map();
+                tables.forEach(table => classify(analysis, table, statuses.get(table.tableId)));
+                analysis.tablesRead += tables.length;
                 onProgress?.({ tablesRead: analysis.tablesRead });
 
                 if (page.isLast) return analysis;

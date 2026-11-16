@@ -1,4 +1,4 @@
-import type { BoardResponse } from "~/core/models/boardGameArena/BoardResponse";
+import type { BoardResponse, News } from "~/core/models/boardGameArena/BoardResponse";
 import type { GetGamesResponse, Table as GetGamesTable } from "~/core/models/boardGameArena/getGamesResponse";
 import type { TableInfos } from "~/core/models/boardGameArena/tableInfosResponse";
 import type { WhoResponse } from "~/core/models/boardGameArena/whoResponse";
@@ -101,6 +101,25 @@ export default class boardGameArenaRepository {
             })
             .catch((error) => {
                 console.error('Failed to fetch BGA game stats:', error);
+                return null;
+            });
+    }
+
+    /** Entrées du fil `message/board` (ex. « Derniers résultats »), pour les paramètres de requête donnés ; null en cas d'erreur. */
+    static async getBoard(query: string): Promise<News[] | null> {
+        const headers = await boardGameArenaRepository.getHeaders();
+
+        if (!headers) return null;
+
+        return fetch(`https://boardgamearena.com/message/board?${query}`, { headers })
+            .then(response => { return response.json() })
+            .then(response => { return response as BoardResponse })
+            .then(response => {
+                const news = response?.data?.news;
+                return Array.isArray(news) ? news : null;
+            })
+            .catch((error) => {
+                console.error('Failed to fetch BGA board:', error);
                 return null;
             });
     }

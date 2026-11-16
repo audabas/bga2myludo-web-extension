@@ -1,6 +1,7 @@
 import boardGameArenaHelper from "~/core/helpers/boardGameArenaHelper";
 import registrationStatusDisplayHelper from "~/core/helpers/registrationStatusDisplayHelper";
 import gameStatsService from "~/core/services/gameStatsService";
+import lastResultsService from "~/core/services/lastResultsService";
 
 export default defineContentScript({
     matches: ["https://boardgamearena.com/*"],
@@ -99,6 +100,26 @@ export default defineContentScript({
                     fetchAndFeedLastResultsPage(++page);
                 });
             }
+
+            // les lignes de « Voir plus » peuvent arriver après le délai de fetchAndFeedLastResultsPage
+            const boardPosts = document.getElementById("boardposts_r");
+            if (boardPosts && !boardPosts.hasAttribute('data-myludo-observer')) {
+                boardPosts.setAttribute('data-myludo-observer', 'true');
+                let debounce: ReturnType<typeof setTimeout> | undefined;
+                new MutationObserver(() => {
+                    clearTimeout(debounce);
+                    debounce = setTimeout(() => fetchAndFeedLastResultsPage(page), 250);
+                }).observe(boardPosts, { childList: true, subtree: true });
+            }
+        }
+
+        function updateLastResultsStatuses() {
+            const links = document.querySelectorAll<HTMLAnchorElement>(`#boardposts_r a.${myLudoEltId}[data-myludo-table-id]`);
+            const tableIds = Array.from(links, link => link.dataset.myludoTableId!);
+            // joueur dont la page est affichée (absent : le joueur connecté)
+            const playerId = new URLSearchParams(window.location.search).get("id");
+
+            lastResultsService.showStatuses(playerId, tableIds, statuses => registrationStatusDisplayHelper.apply(statuses));
         }
 
         function fetchAndFeedLastResultsPage(_page: number) {
@@ -111,6 +132,9 @@ export default defineContentScript({
                 for (const row of rows) {
                     const post = row.closest('.post');
                     if (!post) continue;
+
+                    // seuls les résultats de partie sont traités (pas les trophées ni les autres entrées)
+                    if (!post.querySelector('.board-score-entry')) continue;
 
                     const linkElement = post.querySelector('a[href*="/table?table="]');
                     const gameIcon = post.querySelector('.game_icon');
@@ -131,13 +155,18 @@ export default defineContentScript({
                             try {
                                 const link = await boardGameArenaHelper.getMyLudoLink(tableId, gameId);
                                 span.appendChild(link);
-                                row.appendChild(span);
+                                // une autre passe a pu traiter la ligne pendant l'attente
+                                if (!row.querySelector(`a.${myLudoEltId}`)) {
+                                    row.appendChild(span);
+                                }
                             } catch (error) {
                                 console.error("Error creating Myludo link:", error);
                             }
                         }
                     }
                 }
+
+                updateLastResultsStatuses();
 
                 clearTimeout(timeout);
             }, 125);

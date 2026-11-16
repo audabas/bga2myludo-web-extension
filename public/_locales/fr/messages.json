@@ -283,5 +283,14 @@
     },
     "registeredOnMyludoText": {
         "message": "✓ Enregistrée sur Myludo"
+    },
+    "registrationStatusNotConnectedTooltip": {
+        "message": "Impossible de vérifier si cette partie est enregistrée : vous n'êtes pas connecté à Myludo"
+    },
+    "registrationStatusPermissionMissingTooltip": {
+        "message": "Impossible de vérifier si cette partie est enregistrée : l'extension n'a pas la permission d'accéder à myludo.fr"
+    },
+    "registrationStatusErrorTooltip": {
+        "message": "Impossible de vérifier si cette partie est enregistrée : Myludo n'a pas répondu comme prévu"
     }
 }

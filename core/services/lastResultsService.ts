@@ -3,7 +3,7 @@ import { BackgroundMessages } from "~/core/models/backgroundMessages";
 import type { News } from "~/core/models/boardGameArena/BoardResponse";
 import type { User } from "~/core/models/user";
 import type { RegistrationPlayer, RegistrationStatuses, RegistrationTable } from "~/core/registrationStatus/types";
-import { createHistorySource } from "./historySource";
+import { createHistorySource, type HistoryFeed } from "./historySource";
 
 // type d'entrée `message/board` correspondant à un résultat de partie (les trophées sont "30")
 const GAME_RESULT_NEWS_TYPE = "2";
@@ -57,7 +57,20 @@ function parseTableId(news: News): string | null {
 
 // entrées de « Derniers résultats », lues en suivant le curseur du fil ; un nouveau fil quand le joueur affiché change
 const historySource = createHistorySource<News>({
-    openFeed: playerId => {
+    openFeed: playerId => lastResultsService.openFeed(playerId),
+    tableIdOf: parseTableId,
+    toRegistrationTable: (news, connectedUserId) => lastResultsService.toRegistrationTable(news, connectedUserId)
+});
+
+/** Fil du joueur `playerId`, à défaut le joueur connecté. */
+const playerFeed = (playerId: string | null) => (connectedUser: User) => playerId || String(connectedUser.id);
+
+export default class lastResultsService {
+    /**
+     * Fil `message/board` des résultats de partie du joueur `playerId`, lu en suivant le curseur depuis le plus récent.
+     * Il se termine sur une page vide ou quand le curseur n'avance plus.
+     */
+    static openFeed(playerId: string): HistoryFeed<News> {
         let cursor: BoardCursor | null = null;
         return async () => {
             const news = await lastResultsService.getNews(lastResultsService.buildQuery(playerId, cursor));
@@ -71,15 +84,8 @@ const historySource = createHistorySource<News>({
 
             return { entries: news, isLast };
         };
-    },
-    tableIdOf: parseTableId,
-    toRegistrationTable: (news, connectedUserId) => lastResultsService.toRegistrationTable(news, connectedUserId)
-});
+    }
 
-/** Fil du joueur `playerId`, à défaut le joueur connecté. */
-const playerFeed = (playerId: string | null) => (connectedUser: User) => playerId || String(connectedUser.id);
-
-export default class lastResultsService {
     /** Paramètres `message/board` des résultats de partie d'un joueur, à partir de `from` (page suivante) si fourni. */
     static buildQuery(playerId: string, from?: BoardCursor | null): string {
         const query = new URLSearchParams();

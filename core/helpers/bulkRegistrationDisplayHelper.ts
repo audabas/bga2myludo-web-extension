@@ -7,6 +7,7 @@ import type {
     RegistrationProgress,
     StopReason
 } from "~/core/bulkRegistration/types";
+import { MAX_CONSECUTIVE_FAILURES } from "~/core/bulkRegistration/bulkRegistration";
 import type { MyludoAccountIssue } from "~/core/registrationStatus/types";
 
 /** Marqueur du panneau (jamais la classe des liens Myludo : elle sert de garde d'injection des lignes). */
@@ -113,7 +114,7 @@ export default class bulkRegistrationDisplayHelper {
     /** Explication du bouton désactivé, avec les libellés des options de la fenêtre de l'extension. */
     static missingOptionsText(missingOptions: BulkRegistrationRequiredOption[]): string {
         const options = missingOptions
-            .map(option => `« ${chrome.i18n.getMessage(OPTION_LABELS[option])} »`)
+            .map(option => message("bulkRegistrationOptionName", { OPTION: chrome.i18n.getMessage(OPTION_LABELS[option]) }))
             .join(chrome.i18n.getMessage("bulkRegistrationOptionsSeparator"));
         return message("bulkRegistrationMissingOptionsText", { OPTIONS: options });
     }
@@ -177,7 +178,7 @@ export default class bulkRegistrationDisplayHelper {
     }
 
     /**
-     * Confirmation dans la page, avec le nombre de Tables, avant tout envoi (jamais de `confirm` du navigateur).
+     * Confirmation dans la page, avec le nombre de Tables, avant tout enregistrement sur Myludo (jamais de `confirm` du navigateur).
      * La question s'ajoute sous le résultat de l'analyse.
      */
     static showConfirmation(panel: HTMLElement, count: number, onConfirm: () => void) {
@@ -242,7 +243,9 @@ export default class bulkRegistrationDisplayHelper {
         panel.querySelector(`.${ACTIONS_CLASS}`)?.replaceChildren();
 
         const lines = [
-            message(recap.stopReason ? STOP_REASON_LABELS[recap.stopReason] : "bulkRegistrationCompletedText"),
+            recap.stopReason
+                ? message(STOP_REASON_LABELS[recap.stopReason], { COUNT: MAX_CONSECUTIVE_FAILURES })
+                : message("bulkRegistrationCompletedText"),
             message("bulkRegistrationRecapText", {
                 REGISTERED: recap.registered.length,
                 FAILED: recap.failed.length,

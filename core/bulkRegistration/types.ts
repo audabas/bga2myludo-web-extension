@@ -4,14 +4,14 @@ import type { MyludoAccountIssue, RegistrationStatusModule, RegistrationTable } 
 // Dépendances injectées
 // ---------------------------------------------------------------------------
 
-/** Page lue dans le fil d'historique : ses Tables normalisées (celles du joueur connecté), et si c'est la dernière. */
+/** Page lue dans le fil de l'Historique BGA : ses Tables normalisées (celles du joueur connecté), et si c'est la dernière. */
 export interface BulkHistoryPage {
     tables: RegistrationTable[];
     isLast: boolean;
 }
 
 /**
- * Fil d'historique d'un périmètre (page BGA, filtres, joueur connecté), du plus récent au plus ancien.
+ * Fil de l'Historique BGA d'un périmètre (page BGA, filtres, joueur connecté), du plus récent au plus ancien.
  * Il garde sa propre position ; null en cas d'erreur.
  */
 export type BulkHistoryFeed = () => Promise<BulkHistoryPage | null>;
@@ -42,7 +42,7 @@ export interface BulkFormDriver {
 }
 
 export interface BulkRegistrationDependencies {
-    /** Ouvre le fil d'historique, lu depuis le début (un nouveau fil à chaque lancement). */
+    /** Ouvre le fil de l'Historique BGA, lu depuis le début (un nouveau fil à chaque lancement). */
     openFeed(): BulkHistoryFeed;
     statuses: BulkRegistrationStatusAccess;
     clock: BulkClock;

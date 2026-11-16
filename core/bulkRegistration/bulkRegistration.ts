@@ -12,7 +12,7 @@ import type {
 } from "./types";
 
 /**
- * Plafond de pages lues dans le fil d'historique pour l'Enregistrement groupé (garde-fou contre une pagination
+ * Plafond de pages lues dans le fil de l'Historique BGA pour l'Enregistrement groupé (garde-fou contre une pagination
  * incohérente qui ne finirait jamais), bien au-delà des 30 pages de l'affichage.
  * Mesure : `getGames` (« Statistiques de jeu ») renvoie 10 Tables par page, comme `message/board`
  * (« Derniers résultats », `per_page=10`). 1000 pages couvrent donc 10 000 Tables, soit plus de 5 Tables par jour
@@ -34,7 +34,7 @@ const FORM_TIMEOUT_MS = 30_000;
 const PAUSE_BETWEEN_TABLES_MS = 2_000;
 
 /** Nombre d'échecs à la suite qui arrête le parcours : Myludo ne répond plus, ou son formulaire a changé. */
-const MAX_CONSECUTIVE_FAILURES = 3;
+export const MAX_CONSECUTIVE_FAILURES = 3;
 
 /** Problème de compte Myludo signalé par un statut indéterminé (aucune Table ne peut alors être vérifiée), ou undefined. */
 function myludoAccountIssueOf(status: RegistrationStatus | undefined): MyludoAccountIssue | undefined {
@@ -61,7 +61,7 @@ function classify(analysis: BulkAnalysis, table: RegistrationTable, status: Regi
 
 /**
  * Bouton de l'Enregistrement groupé sur une page d'Historique BGA.
- * - statut Myludo désactivé, aucun joueur BGA connecté, historique d'un autre joueur, ou navigateur sans fenêtres
+ * - statut Myludo désactivé, aucun joueur BGA connecté, Historique BGA d'un autre joueur, ou navigateur sans fenêtres
  *   (Firefox Android : pas de fenêtre Myludo dédiée) : aucun bouton ;
  * - validation automatique ou lien de la table désactivés : bouton désactivé, avec les options manquantes ;
  * - sinon : bouton actif.
@@ -97,7 +97,7 @@ export function isReadyToRegister(analysis: BulkAnalysis): boolean {
 
 /**
  * Module Enregistrement groupé : enregistre sur Myludo toutes les Tables non enregistrées d'un Historique BGA.
- * Il ne connaît pas le DOM ; fil d'historique, Statut d'enregistrement, horloge et pilote de formulaire sont injectés.
+ * Il ne connaît pas le DOM ; fil de l'Historique BGA, Statut d'enregistrement, horloge et pilote de formulaire sont injectés.
  * Il ne mémorise rien entre deux lancements : relancer refait l'analyse, qui exclut les Tables enregistrées.
  */
 export function createBulkRegistration(deps: BulkRegistrationDependencies): BulkRegistrationModule {

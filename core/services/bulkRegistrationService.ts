@@ -17,7 +17,7 @@ const systemClock: BulkClock = {
     sleep: ms => new Promise(resolve => setTimeout(resolve, ms))
 };
 
-/** Fil d'historique de l'Enregistrement groupé : les entrées d'un fil BGA, normalisées pour le joueur connecté. */
+/** Fil de l'Historique BGA de l'Enregistrement groupé : les entrées d'un fil BGA, normalisées pour le joueur connecté. */
 function normalizedFeed<TEntry>(
     feed: HistoryFeed<TEntry>,
     toRegistrationTable: (entry: TEntry) => RegistrationTable | null

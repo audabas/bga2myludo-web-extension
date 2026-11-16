@@ -314,11 +314,14 @@
     "bulkRegistrationMissingOptionsText": {
         "message": "Pour enregistrer toutes les Tables d'un coup, activez dans l'extension : #OPTIONS#."
     },
+    "bulkRegistrationOptionName": {
+        "message": "« #OPTION# »"
+    },
     "bulkRegistrationOptionsSeparator": {
         "message": " et "
     },
     "bulkRegistrationAnalysingText": {
-        "message": "Analyse de l'historique en cours, rien n'est enregistré sur Myludo. Tables lues : #COUNT#"
+        "message": "Analyse de l'Historique BGA en cours, rien n'est enregistré sur Myludo. Tables lues : #COUNT#"
     },
     "bulkRegistrationAnalysisText": {
         "message": "À enregistrer : #TO_REGISTER# · Écartées : #DISCARDED# · Déjà enregistrées : #REGISTERED#"
@@ -333,10 +336,10 @@
         "message": "jeu indisponible sur Myludo : #COUNT#"
     },
     "bulkRegistrationPageCapText": {
-        "message": "Historique trop long : seules les #COUNT# Tables les plus récentes ont été analysées. Restreignez la période ou le jeu avec les filtres de la page."
+        "message": "Historique BGA trop long : seules les #COUNT# Tables les plus récentes ont été analysées. Restreignez la période ou le jeu avec les filtres de la page."
     },
     "bulkRegistrationPageCapLastResultsText": {
-        "message": "Historique trop long : seules les #COUNT# Tables les plus récentes ont été analysées. Pour les plus anciennes, utilisez « Statistiques de jeu », dont les filtres restreignent la période ou le jeu."
+        "message": "Historique BGA trop long : seules les #COUNT# Tables les plus récentes ont été analysées. Pour les plus anciennes, utilisez « Statistiques de jeu », dont les filtres restreignent la période ou le jeu."
     },
     "bulkRegistrationFeedErrorText": {
         "message": "BGA n'a pas répondu comme prévu : l'analyse est incomplète, rien n'a été enregistré sur Myludo. Relancez l'analyse dans quelques instants."
@@ -387,7 +390,7 @@
         "message": "Enregistrement arrêté : l'extension n'a plus accès à myludo.fr. Autorisez-la depuis sa fenêtre, puis relancez l'analyse."
     },
     "bulkRegistrationStopConsecutiveFailuresText": {
-        "message": "Enregistrement arrêté après 3 échecs consécutifs : Myludo ne répond peut-être plus, ou son formulaire a changé. Réessayez plus tard."
+        "message": "Enregistrement arrêté après #COUNT# échecs consécutifs : Myludo ne répond peut-être plus, ou son formulaire a changé. Réessayez plus tard."
     },
     "bulkRegistrationRemainingText": {
         "message": "Tables non traitées : #COUNT#. Relancez l'analyse pour les enregistrer."

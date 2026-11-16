@@ -30,7 +30,7 @@ export default class configurationService {
 
         configuration.keepOnlyTopOpponent = configuration.keepOnlyTopOpponent !== undefined ? configuration.keepOnlyTopOpponent : false;
 
-        configuration.showRegistrationStatus = configuration.showRegistrationStatus !== undefined ? configuration.showRegistrationStatus : true;
+        configuration.showRegistrationStatus = configuration.showRegistrationStatus !== undefined ? configuration.showRegistrationStatus : false;
 
         configuration.users = configuration.users ? configuration.users.sort((a, b) => (a.bgaUser < b.bgaUser ? -1 : 1)) : [];
         configuration.users.forEach((element) => { element.id = uuidv4() });

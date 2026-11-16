@@ -65,11 +65,18 @@ export default class bulkRegistrationDisplayHelper {
         panel.setAttribute(BULK_REGISTRATION_PANEL_ATTRIBUTE, "true");
         panel.style.cssText = "margin: 8px 0;";
 
-        const button = document.createElement("a");
-        button.href = "#";
-        button.classList.add(BUTTON_CLASS, "bgabutton");
-        button.style.cssText = "display: inline-block;";
-        button.textContent = chrome.i18n.getMessage("bulkRegistrationButtonText");
+        const isDisabled = availability.kind === "disabled";
+        const button = bulkRegistrationDisplayHelper.createActionButton(
+            "bulkRegistrationButtonText",
+            isDisabled ? "bgabutton_darkgray" : "bgabutton_blue"
+        );
+        button.classList.add(BUTTON_CLASS);
+        // un bouton désactivé l'est pour de bon ; un bouton actif l'est le temps d'un lancement (setBusy)
+        button.addEventListener("click", event => {
+            event.preventDefault();
+            if (bulkRegistrationDisplayHelper.isDisabled(button)) return;
+            onStart();
+        });
         panel.appendChild(button);
 
         const text = document.createElement("div");
@@ -89,24 +96,12 @@ export default class bulkRegistrationDisplayHelper {
         details.style.cssText = "margin-top: 4px;";
         panel.appendChild(details);
 
-        if (availability.kind === "disabled") {
+        if (isDisabled) {
             const explanation = bulkRegistrationDisplayHelper.missingOptionsText(availability.missingOptions);
-            button.classList.add("bgabutton_darkgray");
-            button.setAttribute("aria-disabled", "true");
-            button.style.opacity = "0.5";
-            button.style.cursor = "not-allowed";
+            bulkRegistrationDisplayHelper.setDisabled(button, true);
             button.title = explanation;
-            button.addEventListener("click", event => event.preventDefault());
             text.textContent = explanation;
-            return panel;
         }
-
-        button.classList.add("bgabutton_blue");
-        button.addEventListener("click", event => {
-            event.preventDefault();
-            if (button.getAttribute("aria-disabled") === "true") return;
-            onStart();
-        });
 
         return panel;
     }
@@ -122,15 +117,7 @@ export default class bulkRegistrationDisplayHelper {
     /** Bouton momentanément inactif (pendant l'analyse), puis rendu. */
     static setBusy(panel: HTMLElement, busy: boolean) {
         const button = panel.querySelector<HTMLElement>(`.${BUTTON_CLASS}`);
-        if (!button) return;
-
-        if (busy) {
-            button.setAttribute("aria-disabled", "true");
-            button.style.opacity = "0.5";
-        } else {
-            button.removeAttribute("aria-disabled");
-            button.style.removeProperty("opacity");
-        }
+        if (button) bulkRegistrationDisplayHelper.setDisabled(button, busy);
     }
 
     static showAnalysing(panel: HTMLElement, tablesRead: number) {
@@ -225,9 +212,8 @@ export default class bulkRegistrationDisplayHelper {
         const stop = bulkRegistrationDisplayHelper.createActionButton("bulkRegistrationStopButtonText", "bgabutton_red");
         stop.addEventListener("click", event => {
             event.preventDefault();
-            if (stop.getAttribute("aria-disabled") === "true") return;
-            stop.setAttribute("aria-disabled", "true");
-            stop.style.opacity = "0.5";
+            if (bulkRegistrationDisplayHelper.isDisabled(stop)) return;
+            bulkRegistrationDisplayHelper.setDisabled(stop, true);
             stop.textContent = chrome.i18n.getMessage("bulkRegistrationStoppingText");
             onStop();
         });
@@ -290,6 +276,23 @@ export default class bulkRegistrationDisplayHelper {
         button.style.cssText = "display: inline-block;";
         button.textContent = chrome.i18n.getMessage(labelKey);
         return button;
+    }
+
+    /** Bouton inactif (grisé, sans effet au clic), ou rendu actif. */
+    private static setDisabled(button: HTMLElement, disabled: boolean) {
+        if (disabled) {
+            button.setAttribute("aria-disabled", "true");
+            button.style.opacity = "0.5";
+            button.style.cursor = "not-allowed";
+        } else {
+            button.removeAttribute("aria-disabled");
+            button.style.removeProperty("opacity");
+            button.style.removeProperty("cursor");
+        }
+    }
+
+    private static isDisabled(button: HTMLElement): boolean {
+        return button.getAttribute("aria-disabled") === "true";
     }
 
     /** Retire la confirmation et le détail des échecs d'un lancement précédent. */

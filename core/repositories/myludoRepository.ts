@@ -13,6 +13,11 @@ function isFlagSet(value: unknown) {
     return value === true || value === 1 || value === "1";
 }
 
+/** Entier positif ou nul, en nombre ou en chaîne. */
+function isCount(value: unknown) {
+    return (typeof value === "number" || (typeof value === "string" && value.trim() !== "")) && Number.isInteger(Number(value)) && Number(value) >= 0;
+}
+
 function toMyludoPlay(item: PlayItem): MyludoPlay | null {
     if (!item || item.id === undefined || item.id === null) return null;
 
@@ -121,8 +126,10 @@ export default class myludoRepository {
     static async getAccount(): Promise<MyludoAccount> {
         const response = await myludoRepository.getJson<LoginInitResponse>("views/login/datas.php", { type: "init" });
 
-        if (!response || typeof response !== "object") return { status: "error" };
-        if (!response.user) return { status: "notConnected" };
+        if (!response || typeof response !== "object" || Array.isArray(response) || !("user" in response)) return { status: "error" };
+        // seule une absence explicite d'utilisateur signifie « non connecté »
+        if (response.user === null || response.user === false) return { status: "notConnected" };
+        if (typeof response.user !== "object") return { status: "error" };
 
         const id = response.user.id;
         if (id === undefined || id === null || String(id) === "") return { status: "error" };
@@ -135,6 +142,7 @@ export default class myludoRepository {
         const plays: MyludoPlay[] = [];
         let page = 1;
         let pages = 1;
+        let count = 0;
 
         do {
             const response = await myludoRepository.getJson<PlaysResponse>("views/game/datas.php", {
@@ -151,7 +159,7 @@ export default class myludoRepository {
 
             if (!Array.isArray(response.list)) {
                 // aucune partie : on n'accepte qu'une réponse explicitement vide
-                if (Number(response.count) === 0) return plays;
+                if (page === 1 && isCount(response.count) && Number(response.count) === 0) return plays;
                 console.error("Unexpected Myludo plays response");
                 return null;
             }
@@ -165,12 +173,21 @@ export default class myludoRepository {
                 plays.push(play);
             }
 
-            pages = Number(response.pages ?? 1);
-            // une liste tronquée pourrait donner un faux « non enregistrée »
-            if (!Number.isFinite(pages) || pages > MAX_PLAYS_PAGES) return null;
+            // une liste tronquée pourrait donner un faux « non enregistrée » : `pages` et `count` (total toutes pages) sont exigés
+            if (!isCount(response.pages) || !isCount(response.count) || Number(response.pages) > MAX_PLAYS_PAGES) {
+                console.error("Unexpected Myludo plays pagination");
+                return null;
+            }
+            pages = Number(response.pages);
+            count = Number(response.count);
 
             page++;
         } while (page <= pages);
+
+        if (plays.length !== count) {
+            console.error("Myludo plays count mismatch");
+            return null;
+        }
 
         return plays;
     }
@@ -179,11 +196,8 @@ export default class myludoRepository {
     static async getPlayDetails(playId: string): Promise<MyludoPlayDetails | null> {
         const response = await myludoRepository.getJson<PlayDetailsResponse>("views/plays/datas.php", { type: "details", id: playId });
 
-        if (!response || typeof response !== "object") return null;
+        if (!response || typeof response !== "object" || typeof response.comment !== "string") return null;
 
-        return {
-            id: playId,
-            comment: typeof response.comment === "string" ? response.comment : ""
-        };
+        return { id: playId, comment: response.comment };
     }
 }

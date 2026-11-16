@@ -35,5 +35,5 @@ export interface PlayDetailsResponse {
 
 /** `views/login/datas.php?type=init` */
 export interface LoginInitResponse {
-    user?: { id?: number | string } | null;
+    user?: { id?: number | string } | null | false;
 }

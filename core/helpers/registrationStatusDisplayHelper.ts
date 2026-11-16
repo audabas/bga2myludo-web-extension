@@ -27,18 +27,26 @@ export default class registrationStatusDisplayHelper {
     /**
      * Table enregistrée : « ✓ Enregistrée sur Myludo » en vert, à la place du lien (qui reste cliquable).
      * Statut indéterminé : le lien reste tel quel, suivi d'un « ? » discret dont l'infobulle donne la raison.
-     * Les autres statuts laissent le lien actuel tel quel.
+     * Les autres statuts gardent (ou rendent) le lien d'origine « Enregistrer sur Myludo ».
      */
     static applyToLink(link: HTMLAnchorElement, status: RegistrationStatus) {
-        if (status.kind === "undetermined") {
-            registrationStatusDisplayHelper.showUndetermined(link, status.reason);
+        if (status.kind === "registered") {
+            registrationStatusDisplayHelper.findUndeterminedMarker(link)?.remove();
+            registrationStatusDisplayHelper.showRegistered(link);
             return;
         }
 
-        registrationStatusDisplayHelper.findUndeterminedMarker(link)?.remove();
-        if (status.kind !== "registered") return;
+        registrationStatusDisplayHelper.showOriginal(link);
 
-        link.dataset.myludoStatus = status.kind;
+        if (status.kind === "undetermined") {
+            registrationStatusDisplayHelper.showUndetermined(link, status.reason);
+        } else {
+            registrationStatusDisplayHelper.findUndeterminedMarker(link)?.remove();
+        }
+    }
+
+    private static showRegistered(link: HTMLAnchorElement) {
+        link.dataset.myludoStatus = "registered";
         link.textContent = chrome.i18n.getMessage("registeredOnMyludoText");
 
         if (link.classList.contains("bgabutton")) {
@@ -48,6 +56,24 @@ export default class registrationStatusDisplayHelper {
             link.style.color = "#fff";
         } else {
             link.style.color = REGISTERED_COLOR;
+        }
+    }
+
+    /** Annule l'affichage « enregistrée » : libellé et style d'origine du lien (seul un jeu mappé peut être enregistré). */
+    private static showOriginal(link: HTMLAnchorElement) {
+        if (link.dataset.myludoStatus !== "registered") return;
+
+        delete link.dataset.myludoStatus;
+        link.textContent = chrome.i18n.getMessage("myLudoLinkText");
+        link.style.removeProperty("background-color");
+        link.style.removeProperty("background-image");
+        link.style.removeProperty("color");
+
+        if (link.classList.contains("bgabutton")) {
+            link.classList.add("bgabutton_darkgray");
+        }
+        if (!link.getAttribute("style")) {
+            link.removeAttribute("style");
         }
     }
 

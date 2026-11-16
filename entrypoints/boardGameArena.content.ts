@@ -159,12 +159,25 @@ export default defineContentScript({
             }
         }
 
+        /** Page affichée, sans l'ancre : BGA navigue en partie sans recharger la page (ni ce script). */
+        function currentPage(): string {
+            return window.location.href.split("#")[0]!;
+        }
+
         /**
          * Enregistrement des Tables analysées, une à une dans la fenêtre Myludo dédiée : progression dans le panneau,
-         * lignes affichées passées à « Enregistrée sur Myludo » au fil de l'eau, puis récapitulatif.
+         * bouton Arrêter, lignes affichées passées à « Enregistrée sur Myludo » au fil de l'eau, puis récapitulatif.
+         * Quitter la page vaut demande d'arrêt : un rechargement ou la fermeture de l'onglet coupe la connexion durable
+         * (le script de fond ferme alors la fenêtre Myludo), et une navigation sans rechargement est repérée ici.
+         * Si BGA retire le panneau de la page, le parcours s'arrête aussi : il ne continue jamais sans affichage.
          */
         async function registerForBulkRegistration(panel: HTMLElement, module: BulkRegistrationModule, analysis: BulkAnalysis) {
             bulkRegistrationDisplayHelper.setBusy(panel, true);
+            bulkRegistrationDisplayHelper.showStopButton(panel, () => module.stop());
+            const page = currentPage();
+            const pageWatcher = setInterval(() => {
+                if (currentPage() !== page || !panel.isConnected) module.stop();
+            }, 250);
             try {
                 const recap = await module.register(analysis, progress => {
                     bulkRegistrationDisplayHelper.showProgress(panel, progress);
@@ -181,6 +194,7 @@ export default defineContentScript({
                 console.error("Error during Myludo bulk registration:", error);
                 bulkRegistrationDisplayHelper.showRegistrationError(panel);
             } finally {
+                clearInterval(pageWatcher);
                 bulkRegistrationDisplayHelper.setBusy(panel, false);
             }
         }

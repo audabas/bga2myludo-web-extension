@@ -4,7 +4,8 @@ import type {
     BulkRegistrationAvailability,
     BulkRegistrationRequiredOption,
     DiscardReason,
-    RegistrationProgress
+    RegistrationProgress,
+    StopReason
 } from "~/core/bulkRegistration/types";
 
 /** Marqueur du panneau (jamais la classe des liens Myludo : elle sert de garde d'injection des lignes). */
@@ -19,6 +20,14 @@ const DISCARD_LABELS: Record<DiscardReason, string> = {
     undetermined: "bulkRegistrationDiscardedUndeterminedText",
     abandoned: "bulkRegistrationDiscardedAbandonedText",
     gameUnavailable: "bulkRegistrationDiscardedGameUnavailableText"
+};
+
+const STOP_REASON_LABELS: Record<StopReason, string> = {
+    requested: "bulkRegistrationStopRequestedText",
+    windowClosed: "bulkRegistrationStopWindowClosedText",
+    myludoNotConnected: "bulkRegistrationStopNotConnectedText",
+    myludoPermissionMissing: "bulkRegistrationStopPermissionMissingText",
+    consecutiveFailures: "bulkRegistrationStopConsecutiveFailuresText"
 };
 
 const BUTTON_CLASS = "myludo-bulk-registration-button";
@@ -188,13 +197,44 @@ export default class bulkRegistrationDisplayHelper {
         }));
     }
 
-    /** Récapitulatif : enregistrées, échecs (avec le lien unitaire de chaque Table), écartées par raison. */
+    /**
+     * Bouton Arrêter, pendant l'enregistrement : `onStop` est appelé une fois ; la Table en cours est alors vérifiée
+     * une dernière fois avant l'arrêt, le bouton l'indique en attendant le récapitulatif.
+     */
+    static showStopButton(panel: HTMLElement, onStop: () => void) {
+        const actions = panel.querySelector(`.${ACTIONS_CLASS}`);
+        if (!actions) return;
+
+        const stop = bulkRegistrationDisplayHelper.createActionButton("bulkRegistrationStopButtonText", "bgabutton_red");
+        stop.addEventListener("click", event => {
+            event.preventDefault();
+            if (stop.getAttribute("aria-disabled") === "true") return;
+            stop.setAttribute("aria-disabled", "true");
+            stop.style.opacity = "0.5";
+            stop.textContent = chrome.i18n.getMessage("bulkRegistrationStoppingText");
+            onStop();
+        });
+
+        actions.replaceChildren(stop);
+    }
+
+    /**
+     * Récapitulatif : fin du parcours ou raison de son arrêt, enregistrées, échecs (avec le lien unitaire de chaque
+     * Table), écartées par raison, et Tables non traitées.
+     */
     static showRecap(panel: HTMLElement, recap: BulkRecap, failedLinks: FailedTableLink[]) {
-        bulkRegistrationDisplayHelper.showText(panel, message("bulkRegistrationRecapText", {
-            REGISTERED: recap.registered.length,
-            FAILED: recap.failed.length,
-            DISCARDED: bulkRegistrationDisplayHelper.discardedText(recap.discarded)
-        }));
+        panel.querySelector(`.${ACTIONS_CLASS}`)?.replaceChildren();
+
+        const lines = [
+            message(recap.stopReason ? STOP_REASON_LABELS[recap.stopReason] : "bulkRegistrationCompletedText"),
+            message("bulkRegistrationRecapText", {
+                REGISTERED: recap.registered.length,
+                FAILED: recap.failed.length,
+                DISCARDED: bulkRegistrationDisplayHelper.discardedText(recap.discarded)
+            })
+        ];
+        if (recap.remaining.length > 0) lines.push(message("bulkRegistrationRemainingText", { COUNT: recap.remaining.length }));
+        bulkRegistrationDisplayHelper.showText(panel, lines.join("\n"));
 
         const details = panel.querySelector(`.${DETAILS_CLASS}`);
         if (!details || failedLinks.length === 0) return;
@@ -220,6 +260,7 @@ export default class bulkRegistrationDisplayHelper {
     }
 
     static showRegistrationError(panel: HTMLElement) {
+        panel.querySelector(`.${ACTIONS_CLASS}`)?.replaceChildren();
         bulkRegistrationDisplayHelper.showText(panel, message("bulkRegistrationRegistrationErrorText"));
     }
 

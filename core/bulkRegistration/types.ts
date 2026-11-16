@@ -37,6 +37,8 @@ export interface BulkFormDriver {
     open(table: RegistrationTable): Promise<void>;
     /** Ferme la fenêtre dédiée (fin du parcours). */
     close(): Promise<void>;
+    /** La fenêtre dédiée a été fermée par l'utilisateur, ou le script de fond a disparu : vaut demande d'arrêt. */
+    onWindowClosed(listener: () => void): void;
 }
 
 export interface BulkRegistrationDependencies {
@@ -115,6 +117,15 @@ export interface RegistrationProgress {
     outcome?: "registered" | "failed";
 }
 
+/**
+ * Raison de l'arrêt d'un parcours avant sa fin :
+ * - `requested` : demande d'arrêt (bouton Arrêter, page BGA quittée) ;
+ * - `windowClosed` : fenêtre Myludo dédiée fermée par l'utilisateur ;
+ * - `myludoNotConnected`, `myludoPermissionMissing` : le statut sans cache ne peut plus être vérifié sur Myludo ;
+ * - `consecutiveFailures` : trop d'échecs à la suite (Myludo ne répond plus, ou son formulaire a changé).
+ */
+export type StopReason = "requested" | "windowClosed" | "myludoNotConnected" | "myludoPermissionMissing" | "consecutiveFailures";
+
 /** Récapitulatif final d'un parcours d'enregistrement. */
 export interface BulkRecap {
     /** numéros des Tables enregistrées pendant le parcours */
@@ -125,6 +136,10 @@ export interface BulkRecap {
     discarded: Record<DiscardReason, string[]>;
     /** numéros des Tables déjà enregistrées avant le parcours */
     alreadyRegistered: string[];
+    /** numéros des Tables à enregistrer qui n'ont pas été traitées, le parcours s'étant arrêté avant */
+    remaining: string[];
+    /** raison de l'arrêt du parcours ; absente quand toutes les Tables ont été traitées */
+    stopReason?: StopReason;
 }
 
 export interface BulkRegistrationModule {
@@ -135,4 +150,9 @@ export interface BulkRegistrationModule {
      * dans une fenêtre Myludo dédiée fermée à la fin.
      */
     register(analysis: BulkAnalysis, onProgress?: (progress: RegistrationProgress) => void): Promise<BulkRecap>;
+    /**
+     * Demande l'arrêt du parcours d'enregistrement en cours (sans effet s'il n'y en a pas) : la Table en cours est
+     * vérifiée une dernière fois, et compte comme enregistrée ou en échec, puis le parcours s'arrête.
+     */
+    stop(): void;
 }

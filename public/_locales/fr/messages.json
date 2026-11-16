@@ -360,7 +360,34 @@
         "message": "Enregistrement sur Myludo : #RANK# / #TOTAL# (Table ##TABLE_ID#). Laissez la fenêtre Myludo ouverte et visible."
     },
     "bulkRegistrationRecapText": {
-        "message": "Enregistrement terminé. Enregistrées : #REGISTERED# · Échecs : #FAILED# · Écartées : #DISCARDED#"
+        "message": "Enregistrées : #REGISTERED# · Échecs : #FAILED# · Écartées : #DISCARDED#"
+    },
+    "bulkRegistrationCompletedText": {
+        "message": "Enregistrement terminé."
+    },
+    "bulkRegistrationStopButtonText": {
+        "message": "Arrêter"
+    },
+    "bulkRegistrationStoppingText": {
+        "message": "Arrêt en cours…"
+    },
+    "bulkRegistrationStopRequestedText": {
+        "message": "Enregistrement arrêté à votre demande."
+    },
+    "bulkRegistrationStopWindowClosedText": {
+        "message": "Enregistrement arrêté : la fenêtre Myludo a été fermée."
+    },
+    "bulkRegistrationStopNotConnectedText": {
+        "message": "Enregistrement arrêté : vous n'êtes pas connecté à Myludo. Connectez-vous sur myludo.fr, puis relancez l'analyse."
+    },
+    "bulkRegistrationStopPermissionMissingText": {
+        "message": "Enregistrement arrêté : l'extension n'a plus accès à myludo.fr. Autorisez-la depuis sa fenêtre, puis relancez l'analyse."
+    },
+    "bulkRegistrationStopConsecutiveFailuresText": {
+        "message": "Enregistrement arrêté après 3 échecs consécutifs : Myludo ne répond peut-être plus, ou son formulaire a changé. Réessayez plus tard."
+    },
+    "bulkRegistrationRemainingText": {
+        "message": "Tables non traitées : #COUNT#. Relancez l'analyse pour les enregistrer."
     },
     "bulkRegistrationFailedTablesText": {
         "message": "Tables en échec, à reprendre une par une :"

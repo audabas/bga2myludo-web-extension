@@ -2,7 +2,11 @@ import { BackgroundMessages } from "~/core/models/backgroundMessages";
 import type { BackgroundRequest } from "~/core/messaging/sendToBackground";
 import boardGameArenaRepository from "~/core/repositories/boardGameArenaRepository";
 import notificationsService from "~/core/services/notificationsService";
-import { handleBulkRegistrationPort } from "./bulkRegistrationWindow";
+import {
+    canOpenWindows as canOpenBulkRegistrationWindows,
+    closeOrphanBulkRegistrationWindows,
+    handleBulkRegistrationPort
+} from "./bulkRegistrationWindow";
 import canOpenWindows from "./messages/canOpenWindows";
 import getBgaBoard from "./messages/getBgaBoard";
 import getBgaFriends from "./messages/getBgaFriends";
@@ -42,6 +46,7 @@ export default defineBackground(() => {
 
     // Enregistrement groupé : fenêtre Myludo dédiée, pilotée depuis la page BGA par une connexion durable
     chrome.runtime.onConnect.addListener(handleBulkRegistrationPort);
+    if (canOpenBulkRegistrationWindows()) closeOrphanBulkRegistrationWindows();
 
     chrome.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
         const manifestData = chrome.runtime.getManifest();

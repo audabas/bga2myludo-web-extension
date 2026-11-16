@@ -7,17 +7,12 @@ import {
 } from "~/core/models/bulkRegistrationPort";
 import type { RegistrationTable } from "~/core/registrationStatus/types";
 
-/** Pilote de formulaire de la page BGA, avec la fermeture de la fenêtre dédiée par l'utilisateur. */
-export interface PortFormDriver extends BulkFormDriver {
-    /** La fenêtre Myludo dédiée a été fermée par l'utilisateur, ou le script de fond a disparu. */
-    onWindowClosed(listener: () => void): void;
-}
-
 /**
  * Pilote de formulaire relié au script de fond par une connexion durable : le script de fond crée la fenêtre Myludo
  * dédiée et y charge chaque formulaire ; `close` (déconnexion) la ferme. Voir `entrypoints/background/bulkRegistrationWindow.ts`.
+ * La fermeture de la fenêtre par l'utilisateur, ou la disparition du script de fond, est signalée à `onWindowClosed`.
  */
-export function openPortFormDriver(): PortFormDriver {
+export function openPortFormDriver(): BulkFormDriver {
     const port = chrome.runtime.connect({ name: BULK_REGISTRATION_PORT_NAME });
     const pending = new Map<number, { resolve: () => void; reject: (error: Error) => void }>();
     const windowClosedListeners: (() => void)[] = [];

@@ -1,3 +1,4 @@
+import { storage } from "wxt/utils/storage";
 import {
     BULK_REGISTRATION_PORT_NAME,
     type BulkRegistrationOpenRequest,
@@ -10,6 +11,33 @@ const WINDOW_HEIGHT = 800;
 
 /** Délai maximal du chargement de la page vide intercalée entre deux formulaires. */
 const BLANK_PAGE_TIMEOUT_MS = 5_000;
+
+/**
+ * Fenêtres Myludo dédiées ouvertes par ce script de fond, recopiées en stockage de session : si le service worker
+ * est arrêté pendant un parcours, la connexion avec la page BGA est coupée et la page s'arrête, mais la fenêtre reste
+ * ouverte. Au redémarrage du script de fond, les fenêtres notées par l'instance précédente sont donc orphelines.
+ */
+const DEDICATED_WINDOWS_KEY = "session:bulkRegistrationWindowIds";
+const dedicatedWindows = new Set<number>();
+
+function saveDedicatedWindows() {
+    storage.setItem(DEDICATED_WINDOWS_KEY, [...dedicatedWindows])
+        .catch(error => console.error("Error saving the Myludo bulk registration windows:", error));
+}
+
+/** Ferme les fenêtres dédiées laissées par une instance précédente du script de fond (à appeler au démarrage). */
+export async function closeOrphanBulkRegistrationWindows() {
+    try {
+        const orphans = (await storage.getItem<number[]>(DEDICATED_WINDOWS_KEY)) ?? [];
+        await Promise.all(orphans
+            .filter(id => !dedicatedWindows.has(id))
+            .map(id => chrome.windows.remove(id).catch(() => undefined)));
+        await storage.setItem(DEDICATED_WINDOWS_KEY, [...dedicatedWindows]);
+    } catch (error) {
+        // stockage de session absent (anciens Firefox) : rien à fermer
+        console.error("Error closing orphan Myludo bulk registration windows:", error);
+    }
+}
 
 /** Enregistrement groupé possible : le navigateur sait créer des fenêtres (Firefox Android ne le sait pas). */
 export function canOpenWindows(): boolean {
@@ -69,16 +97,21 @@ export function handleBulkRegistrationPort(port: chrome.runtime.Port) {
         }
     };
 
+    const forgetWindow = (id: number) => {
+        if (dedicatedWindows.delete(id)) saveDedicatedWindows();
+    };
+
     const closeWindow = () => {
         if (windowId === undefined) return;
         const id = windowId;
         windowId = undefined;
         tabId = undefined;
-        chrome.windows.remove(id).catch(() => undefined);
+        chrome.windows.remove(id).catch(() => undefined).then(() => forgetWindow(id));
     };
 
     const onWindowRemoved = (removedWindowId: number) => {
         if (removedWindowId !== windowId) return;
+        forgetWindow(removedWindowId);
         windowId = undefined;
         tabId = undefined;
         windowClosedByUser = true;
@@ -98,6 +131,10 @@ export function handleBulkRegistrationPort(port: chrome.runtime.Port) {
             });
             windowId = created?.id;
             tabId = created?.tabs?.[0]?.id;
+            if (windowId !== undefined) {
+                dedicatedWindows.add(windowId);
+                saveDedicatedWindows();
+            }
             if (disconnected) {
                 closeWindow();
                 return;

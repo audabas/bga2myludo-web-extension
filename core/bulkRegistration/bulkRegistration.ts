@@ -7,7 +7,8 @@ import type {
     BulkRegistrationDependencies,
     BulkRegistrationModule,
     BulkRegistrationOptions,
-    BulkRegistrationRequiredOption
+    BulkRegistrationRequiredOption,
+    StopReason
 } from "./types";
 
 /**
@@ -31,6 +32,9 @@ const FORM_TIMEOUT_MS = 30_000;
 
 /** Pause entre deux Tables, pour ne pas surcharger Myludo. */
 const PAUSE_BETWEEN_TABLES_MS = 2_000;
+
+/** Nombre d'échecs à la suite qui arrête le parcours : Myludo ne répond plus, ou son formulaire a changé. */
+const MAX_CONSECUTIVE_FAILURES = 3;
 
 /** Range une Table dans l'analyse selon son Statut d'enregistrement. */
 function classify(analysis: BulkAnalysis, table: RegistrationTable, status: RegistrationStatus | undefined) {
@@ -84,6 +88,8 @@ export function bulkRegistrationAvailability(
  * Il ne mémorise rien entre deux lancements : relancer refait l'analyse, qui exclut les Tables enregistrées.
  */
 export function createBulkRegistration(deps: BulkRegistrationDependencies): BulkRegistrationModule {
+    let currentRun: Run | undefined;
+
     return {
         async analyse(onProgress) {
             const analysis: BulkAnalysis = {
@@ -119,41 +125,81 @@ export function createBulkRegistration(deps: BulkRegistrationDependencies): Bulk
                 registered: [],
                 failed: [],
                 discarded: analysis.discarded,
-                alreadyRegistered: analysis.alreadyRegistered
+                alreadyRegistered: analysis.alreadyRegistered,
+                remaining: []
             };
 
             const total = analysis.toRegister.length;
             if (total === 0) return recap;
 
+            const run = createRun();
+            currentRun = run;
+            let processed = 0;
+            let consecutiveFailures = 0;
+
             const forms = deps.openFormDriver();
+            forms.onWindowClosed(() => run.requestStop("windowClosed"));
             try {
                 for (const [index, table] of analysis.toRegister.entries()) {
-                    if (index > 0) await deps.clock.sleep(PAUSE_BETWEEN_TABLES_MS);
+                    if (index > 0) await run.wait(PAUSE_BETWEEN_TABLES_MS);
+                    if (run.stopReason) break;
 
                     const progress = { table, rank: index + 1, total };
                     onProgress?.(progress);
-                    if (await registerOne(table, forms)) {
+                    const registered = await registerOne(table, forms, run);
+                    processed++;
+                    if (registered) {
+                        consecutiveFailures = 0;
                         recap.registered.push(table.tableId);
                         onProgress?.({ ...progress, outcome: "registered" });
                     } else {
+                        consecutiveFailures++;
                         recap.failed.push(table);
                         onProgress?.({ ...progress, outcome: "failed" });
                     }
+
+                    // après la dernière Table, le parcours est de toute façon terminé
+                    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && index < total - 1) {
+                        run.requestStop("consecutiveFailures");
+                    }
                 }
             } finally {
+                if (currentRun === run) currentRun = undefined;
                 await forms.close();
             }
 
+            recap.remaining = analysis.toRegister.slice(processed).map(table => table.tableId);
+            recap.stopReason = run.stopReason;
             return recap;
+        },
+
+        stop() {
+            currentRun?.requestStop("requested");
         }
     };
+
+    function createRun(): Run {
+        let onStop = () => {};
+        const stopped = new Promise<void>(resolve => { onStop = resolve; });
+        const run: Run = {
+            requestStop(reason) {
+                if (run.stopReason) return;
+                run.stopReason = reason;
+                onStop();
+            },
+            wait: ms => run.stopReason ? Promise.resolve() : Promise.race([deps.clock.sleep(ms), stopped])
+        };
+        return run;
+    }
 
     /**
      * Invalide le statut de la Table et ouvre son formulaire, puis attend que son statut sans cache dise « enregistrée »
      * (au plus 30 s). Le statut sans cache n'est pas mis en cache : une fois la Table enregistrée, un dernier calcul
      * avec cache l'y écrit, comme pour l'affichage. Une Table en échec reste hors du cache.
+     * Une demande d'arrêt écourte l'attente : le statut est alors vérifié une dernière fois, tout de suite.
+     * Compte Myludo non connecté (ou permission manquante) : la Table compte en échec et le parcours s'arrête aussitôt.
      */
-    async function registerOne(table: RegistrationTable, forms: BulkFormDriver): Promise<boolean> {
+    async function registerOne(table: RegistrationTable, forms: BulkFormDriver, run: Run): Promise<boolean> {
         await deps.statuses.invalidate(table.tableId);
         try {
             await forms.open(table);
@@ -164,13 +210,26 @@ export function createBulkRegistration(deps: BulkRegistrationDependencies): Bulk
 
         const deadline = deps.clock.now().getTime() + FORM_TIMEOUT_MS;
         while (deps.clock.now().getTime() < deadline) {
-            await deps.clock.sleep(Math.min(STATUS_POLL_INTERVAL_MS, deadline - deps.clock.now().getTime()));
+            await run.wait(Math.min(STATUS_POLL_INTERVAL_MS, deadline - deps.clock.now().getTime()));
             const status = (await deps.statuses.getStatuses([table], { useCache: false })).get(table.tableId);
             if (status?.kind === "registered") {
                 await deps.statuses.getStatuses([table]);
                 return true;
             }
+            // le compte Myludo ne peut plus être interrogé : continuer accumulerait des échecs
+            if (status?.kind === "undetermined" && status.reason === "notConnected") run.requestStop("myludoNotConnected");
+            if (status?.kind === "undetermined" && status.reason === "permissionMissing") run.requestStop("myludoPermissionMissing");
+            if (run.stopReason) return false;
         }
         return false;
     }
+}
+
+/** Parcours d'enregistrement en cours, que l'on peut arrêter. */
+interface Run {
+    /** raison de l'arrêt demandé : la première demande l'emporte */
+    stopReason?: StopReason;
+    requestStop(reason: StopReason): void;
+    /** pause, écourtée par une demande d'arrêt */
+    wait(ms: number): Promise<void>;
 }

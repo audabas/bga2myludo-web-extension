@@ -16,8 +16,6 @@ const historySource = createHistorySource<GetGamesTable>({
     toRegistrationTable: (table, connectedUserId) => gameStatsService.toRegistrationTable(table, connectedUserId)
 });
 
-const currentFilters = (connectedUser: User) => gameStatsService.currentFilters(connectedUser);
-
 export default class gameStatsService {
     /** Filtres de l'URL courante de « Statistiques de jeu », avec le joueur affiché. */
     static currentFilters(connectedUser: User): string {
@@ -97,11 +95,11 @@ export default class gameStatsService {
 
     /** Calcule le Statut d'enregistrement des Tables affichées (une seule fois par Table), puis appelle `onStatuses`. */
     static showStatuses(tableIds: string[], onStatuses: (statuses: RegistrationStatuses) => void) {
-        return historySource.showStatuses(currentFilters, tableIds, onStatuses);
+        return historySource.showStatuses(gameStatsService.currentFilters, tableIds, onStatuses);
     }
 
     /** Recalcule le Statut d'enregistrement de Tables déjà affichées (Tables invalidées), à la suite des autres calculs. */
     static refreshStatuses(tableIds: string[]): Promise<RegistrationStatuses> {
-        return historySource.refreshStatuses(currentFilters, tableIds);
+        return historySource.refreshStatuses(gameStatsService.currentFilters, tableIds);
     }
 }

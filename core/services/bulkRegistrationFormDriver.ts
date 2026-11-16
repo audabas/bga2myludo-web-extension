@@ -44,7 +44,7 @@ export function openPortFormDriver(): BulkFormDriver {
 
     return {
         async open(table: RegistrationTable) {
-            const url = await boardGameArenaHelper.myludoFormUrl(table.bgaGameId, table.tableId);
+            const url = await boardGameArenaHelper.myludoFormUrl(table);
             if (!url) throw new Error(`No Myludo game for ${table.bgaGameId}`);
             if (!connected) throw new Error("Background disconnected");
 

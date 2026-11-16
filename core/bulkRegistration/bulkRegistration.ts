@@ -71,10 +71,10 @@ export function bulkRegistrationAvailability(
     options: BulkRegistrationOptions,
     displayedPlayerId: string | null,
     connectedUserId: string | null,
-    canOpenWindows = true
+    windowsSupported: boolean
 ): BulkRegistrationAvailability {
     if (options.showRegistrationStatus !== true) return { kind: "hidden" };
-    if (!canOpenWindows) return { kind: "hidden" };
+    if (!windowsSupported) return { kind: "hidden" };
     if (!connectedUserId) return { kind: "hidden" };
     // `who` peut renvoyer un id numérique
     if (displayedPlayerId && String(displayedPlayerId) !== String(connectedUserId)) return { kind: "hidden" };

@@ -34,7 +34,7 @@ function normalizedFeed<TEntry>(
 }
 
 /** Le script de fond sait-il ouvrir la fenêtre Myludo dédiée ? (pas de fenêtres sur Firefox Android) */
-async function canOpenWindows(): Promise<boolean> {
+async function backgroundCanOpenWindows(): Promise<boolean> {
     try {
         const response = await sendToBackground<boolean>({ name: BackgroundMessages.CAN_OPEN_WINDOWS });
         return response?.message === true;
@@ -69,7 +69,7 @@ async function forHistoryPage(
         configuration,
         displayedPlayer,
         connectedUser?.id ?? null,
-        await canOpenWindows()
+        await backgroundCanOpenWindows()
     );
     if (availability.kind !== "enabled" || !connectedUser) return { availability };
 

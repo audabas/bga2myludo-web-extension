@@ -1,3 +1,4 @@
+import type { RegistrationTable } from "~/core/registrationStatus/types";
 import configurationService from "~/core/services/configurationService";
 
 const MYLUDO_CONTACT_URL = "https://www.myludo.fr/#!/contact/technique";
@@ -22,9 +23,9 @@ export default class boardGameArenaHelper {
     }
 
     /** URL du lien unitaire d'une Table, ou null si son jeu n'a pas de Correspondance de jeu (Jeu indisponible). */
-    static async myludoFormUrl(bgaGameId: string, tableId: string): Promise<string | null> {
-        const gameInfo = await configurationService.getGame(bgaGameId);
-        return gameInfo?.currentMyludoId ? boardGameArenaHelper.myludoPlayUrl(gameInfo.currentMyludoId, tableId) : null;
+    static async myludoFormUrl(table: Pick<RegistrationTable, "bgaGameId" | "tableId">): Promise<string | null> {
+        const gameInfo = await configurationService.getGame(table.bgaGameId);
+        return gameInfo?.currentMyludoId ? boardGameArenaHelper.myludoPlayUrl(gameInfo.currentMyludoId, table.tableId) : null;
     }
 
     private static async createLinkElement(config: LinkConfig): Promise<LinkResult> {

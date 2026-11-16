@@ -40,7 +40,7 @@ export async function closeOrphanBulkRegistrationWindows() {
 }
 
 /** Enregistrement groupé possible : le navigateur sait créer des fenêtres (Firefox Android ne le sait pas). */
-export function canOpenWindows(): boolean {
+export function browserSupportsWindows(): boolean {
     return typeof chrome.windows?.create === "function";
 }
 

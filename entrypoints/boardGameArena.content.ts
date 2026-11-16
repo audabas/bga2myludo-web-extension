@@ -239,7 +239,7 @@ export default defineContentScript({
                 });
                 const failedLinks = await Promise.all(recap.failed.map(async table => ({
                     tableId: table.tableId,
-                    url: await boardGameArenaHelper.myludoFormUrl(table.bgaGameId, table.tableId).catch(() => null)
+                    url: await boardGameArenaHelper.myludoFormUrl(table).catch(() => null)
                 })));
                 bulkRegistrationDisplayHelper.showRecap(panel, recap, failedLinks);
             } catch (error) {

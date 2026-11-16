@@ -1,9 +1,11 @@
 import { candidateWindow, localEndDay } from "./localDay";
 import { findMatchingPlay } from "./matching";
+import { findPlayByTableNumber } from "./tableNumberFallback";
 import type {
     GetStatusesOptions,
     MyludoAccount,
     MyludoPlay,
+    MyludoPlayDetails,
     RegistrationStatus,
     RegistrationStatusConfiguration,
     RegistrationStatusDependencies,
@@ -63,6 +65,8 @@ function groupByGameAndDay(pending: PendingTable[]): PendingTable[][] {
     return [...groups.values()];
 }
 
+type DetailsReader = (playId: string) => Promise<MyludoPlayDetails | null>;
+
 export function createRegistrationStatus(deps: RegistrationStatusDependencies): RegistrationStatusModule {
     function resolveGames(tables: RegistrationTable[], configuration: RegistrationStatusConfiguration, statuses: RegistrationStatuses): PendingTable[] {
         const pending: PendingTable[] = [];
@@ -88,20 +92,44 @@ export function createRegistrationStatus(deps: RegistrationStatusDependencies): 
         return pending;
     }
 
-    async function computeGroup(group: PendingTable[], configuration: RegistrationStatusConfiguration, statuses: RegistrationStatuses) {
+    /** Lecture du détail d'une Partie Myludo, au plus une fois par Partie Myludo et par calcul. */
+    function detailsReader(): DetailsReader {
+        const details = new Map<string, Promise<MyludoPlayDetails | null>>();
+        return playId => {
+            let pending = details.get(playId);
+            if (!pending) {
+                pending = safely(() => deps.myludo.getPlayDetails(playId));
+                details.set(playId, pending);
+            }
+            return pending;
+        };
+    }
+
+    async function computeGroup(group: PendingTable[], configuration: RegistrationStatusConfiguration, getDetails: DetailsReader, statuses: RegistrationStatuses) {
         const { myludoGameId, day } = group[0]!;
         const { dateFrom, dateTo } = candidateWindow(day);
         const plays: MyludoPlay[] | null = await safely(() => deps.myludo.getPlays(myludoGameId, dateFrom, dateTo));
 
-        group.forEach(({ table }) => {
+        for (const { table } of group) {
             if (!plays) {
                 statuses.set(table.tableId, undetermined("error"));
-                return;
+                continue;
             }
 
-            const match = findMatchingPlay(table, plays, configuration);
-            statuses.set(table.tableId, match ? { kind: "registered" } : { kind: "notRegistered" });
-        });
+            if (findMatchingPlay(table, plays, configuration)) {
+                statuses.set(table.tableId, { kind: "registered" });
+                continue;
+            }
+
+            // Repli par numéro de table (lien de table écrit par l'extension dans le commentaire)
+            const fallback = await findPlayByTableNumber(table, plays, getDetails);
+            if (fallback.match) {
+                statuses.set(table.tableId, { kind: "registered" });
+            } else {
+                // un détail illisible ne doit pas donner un faux « non enregistrée »
+                statuses.set(table.tableId, fallback.detailsFailed ? undetermined("error") : { kind: "notRegistered" });
+            }
+        }
     }
 
     return {
@@ -124,8 +152,9 @@ export function createRegistrationStatus(deps: RegistrationStatusDependencies): 
             }
 
             // séquentiel, pour ne pas solliciter Myludo en rafale
+            const getDetails = detailsReader();
             for (const group of groupByGameAndDay(pending)) {
-                await computeGroup(group, configuration, statuses);
+                await computeGroup(group, configuration, getDetails, statuses);
             }
 
             return statuses;

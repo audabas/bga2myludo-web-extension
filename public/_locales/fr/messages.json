@@ -131,6 +131,21 @@
     "configurationKeepOnlyTopOpponentTitle": {
         "message": "Ce paramètre ne conserve que vous et le joueur ayant obtenu le meilleur score lors de la saisie de la partie sur Myludo"
     },
+    "configurationShowRegistrationStatusLabel": {
+        "message": "Afficher le statut Myludo dans l'historique BGA"
+    },
+    "configurationShowRegistrationStatusTitle": {
+        "message": "Ce paramètre indique, dans l'historique de vos parties sur Board Game Arena, les parties déjà enregistrées sur Myludo"
+    },
+    "configurationClearRegistrationStatusCacheLabel": {
+        "message": "Vider le cache des statuts Myludo"
+    },
+    "configurationClearRegistrationStatusCacheTitle": {
+        "message": "Le statut Myludo de toutes vos parties sera recalculé à la prochaine consultation de l'historique BGA"
+    },
+    "configurationClearRegistrationStatusCacheDone": {
+        "message": "Cache vidé"
+    },
     "dayMode": {
         "message": "Basculer en mode jour"
     },

@@ -143,7 +143,8 @@ export function createRegistrationStatus(deps: RegistrationStatusDependencies): 
             if (tables.length === 0) return statuses;
 
             const configuration = await deps.configuration();
-            if (!configuration.enabled) return statuses;
+            // l'option ne concerne que l'Historique BGA : le mode « sans cache » (formulaire Myludo) l'ignore
+            if (useCache && !configuration.enabled) return statuses;
 
             const pending = resolveGames(tables, configuration, statuses);
             if (pending.length === 0) return statuses;

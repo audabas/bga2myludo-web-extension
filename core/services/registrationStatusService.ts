@@ -10,8 +10,7 @@ async function readConfiguration(): Promise<RegistrationStatusConfiguration> {
     const games = await configurationService.getGames();
 
     return {
-        // l'option « Afficher le statut Myludo dans l'historique BGA » n'existe pas encore
-        enabled: true,
+        enabled: configuration.showRegistrationStatus !== false,
         customCurrentPlayerName: configuration.customizeCurrentPlayer && configuration.customCurrentPlayerName
             ? configuration.customCurrentPlayerName
             : undefined,
@@ -24,7 +23,7 @@ async function readConfiguration(): Promise<RegistrationStatusConfiguration> {
 }
 
 /** Module Statut d'enregistrement branché sur le script de fond (Myludo), le stockage local et l'horloge système. */
-const registrationStatusService = createRegistrationStatus({
+const registrationStatusModule = createRegistrationStatus({
     myludo: {
         getAccount: () => myludoService.getAccount(),
         getPlays: (myludoGameId, dateFrom, dateTo) => myludoService.getPlays(myludoGameId, dateFrom, dateTo),
@@ -34,5 +33,18 @@ const registrationStatusService = createRegistrationStatus({
     clock: { now: () => new Date() },
     configuration: readConfiguration
 });
+
+const registrationStatusService = {
+    ...registrationStatusModule,
+
+    /**
+     * Vrai si l'option « Afficher le statut Myludo dans l'historique BGA » est activée.
+     * Les pages de l'Historique BGA la consultent avant tout appel (BGA comme Myludo).
+     */
+    async isHistoryEnabled(): Promise<boolean> {
+        const configuration = await configurationService.get();
+        return configuration.showRegistrationStatus !== false;
+    }
+};
 
 export default registrationStatusService;

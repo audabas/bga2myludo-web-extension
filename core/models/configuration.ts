@@ -16,4 +16,5 @@ export class Configuration {
     users!: MappedUser[];
     overridenGames!: MappedGame[];
     autoUpdateUsers!: boolean;
+    showRegistrationStatus?: boolean;
 }

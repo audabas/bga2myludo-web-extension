@@ -105,7 +105,7 @@ export type RegistrationStatusStorage = WxtStorage;
 
 /** Configuration utile au module, lue une fois par calcul. */
 export interface RegistrationStatusConfiguration {
-    /** option « Afficher le statut Myludo dans l'historique BGA » */
+    /** option « Afficher le statut Myludo dans l'historique BGA » ; ignorée en mode « sans cache » (formulaire Myludo) */
     enabled: boolean;
     /** nom personnalisé du joueur courant (« Moi »), ou undefined si l'option est désactivée */
     customCurrentPlayerName?: string;

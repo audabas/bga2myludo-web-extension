@@ -1,6 +1,9 @@
+import CheckIcon from '@mui/icons-material/Check';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import { Divider, List, ListItemButton, ListItemIcon, ListItemText, Switch, TextField } from '@mui/material';
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import type { Configuration as ConfigurationModel } from '~/core/models/configuration';
+import registrationStatusService from '~/core/services/registrationStatusService';
 import '../popup.scss';
 
 type Props = {
@@ -26,6 +29,14 @@ export default function Configuration({ configuration, onConfigurationUpdated }:
     const onClick = useCallback((name: keyof ConfigurationModel): void => {
         onConfigurationUpdated({ ...configuration, [name]: !configuration[name] });
     }, [configuration, onConfigurationUpdated]);
+
+    const [cacheCleared, setCacheCleared] = useState(false);
+
+    const clearRegistrationStatusCache = useCallback((): void => {
+        registrationStatusService.clearCache()
+            .then(() => setCacheCleared(true))
+            .catch(error => console.error("Failed to clear Myludo registration status cache:", error));
+    }, []);
 
     return (
         <div className='configuration'>
@@ -166,6 +177,30 @@ export default function Configuration({ configuration, onConfigurationUpdated }:
                         />
                     </div>
                 }
+
+                <Divider />
+
+                <ListItemButton onClick={() => onClick("showRegistrationStatus")}>
+                    <ListItemIcon>
+                        <Switch checked={configuration.showRegistrationStatus} size='small' />
+                    </ListItemIcon>
+                    <ListItemText
+                        className='configuration-item'
+                        primary={<span className='configuration-item-primary'>{chrome.i18n.getMessage("configurationShowRegistrationStatusLabel")}</span>}
+                        secondary={<span className='configuration-item-secondary'>{chrome.i18n.getMessage("configurationShowRegistrationStatusTitle")}</span>}
+                    />
+                </ListItemButton>
+
+                <ListItemButton onClick={clearRegistrationStatusCache} disabled={cacheCleared}>
+                    <ListItemIcon>
+                        {cacheCleared ? <CheckIcon fontSize='small' color='success' /> : <DeleteSweepIcon fontSize='small' color='primary' />}
+                    </ListItemIcon>
+                    <ListItemText
+                        className='configuration-item'
+                        primary={<span className='configuration-item-primary'>{chrome.i18n.getMessage(cacheCleared ? "configurationClearRegistrationStatusCacheDone" : "configurationClearRegistrationStatusCacheLabel")}</span>}
+                        secondary={<span className='configuration-item-secondary'>{chrome.i18n.getMessage("configurationClearRegistrationStatusCacheTitle")}</span>}
+                    />
+                </ListItemButton>
 
             </List>
         </div>

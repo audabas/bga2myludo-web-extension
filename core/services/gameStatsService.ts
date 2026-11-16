@@ -109,6 +109,9 @@ export default class gameStatsService {
 
     /** Statuts des Tables données, calculés avec le cache. */
     private static async statusesOf(tableIds: string[]): Promise<RegistrationStatuses> {
+        // option désactivée (y compris le recalcul au retour sur l'onglet) : aucun appel BGA ni Myludo
+        if (!(await registrationStatusService.isHistoryEnabled())) return new Map();
+
         connectedUser ??= boardGameArenaService.isConnected().then(user => user || null);
         const user = await connectedUser;
         if (!user) return new Map();
@@ -126,6 +129,9 @@ export default class gameStatsService {
     }
 
     private static async computeStatuses(tableIds: string[], onStatuses: (statuses: RegistrationStatuses) => void) {
+        // option désactivée : la page reste telle qu'aujourd'hui, sans aucun appel BGA ni Myludo
+        if (!(await registrationStatusService.isHistoryEnabled())) return;
+
         const newTableIds = tableIds.filter(id => !requestedTableIds.has(id));
         if (newTableIds.length === 0) return;
         newTableIds.forEach(id => requestedTableIds.add(id));

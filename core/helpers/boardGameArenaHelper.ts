@@ -61,6 +61,7 @@ export default class boardGameArenaHelper {
         const link = document.createElement("a");
         link.target = "_blank";
         link.classList.add("myludo-browser-extension-button");
+        link.dataset.myludoTableId = tableId;
 
         const result = await this.createLinkElement({ tableId, gameId, isButton: false });
         link.href = result.href;
@@ -77,6 +78,7 @@ export default class boardGameArenaHelper {
         link.target = "_blank";
         link.classList.add("myludo-browser-extension-button", "action-button", "bgabutton");
         link.style.cssText = "display: inline;";
+        link.dataset.myludoTableId = tableId;
 
         const result = await this.createLinkElement({ tableId, gameId, isButton: true });
         link.href = result.href;

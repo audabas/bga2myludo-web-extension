@@ -1,4 +1,6 @@
 import boardGameArenaHelper from "~/core/helpers/boardGameArenaHelper";
+import registrationStatusDisplayHelper from "~/core/helpers/registrationStatusDisplayHelper";
+import gameStatsService from "~/core/services/gameStatsService";
 
 export default defineContentScript({
     matches: ["https://boardgamearena.com/*"],
@@ -161,6 +163,24 @@ export default defineContentScript({
                     fetchAndFeedStatsPage(++page);
                 });
             }
+
+            // les lignes de « Voir plus » peuvent arriver après le délai de fetchAndFeedStatsPage
+            const gameList = document.getElementById("gamelist_inner");
+            if (gameList && !gameList.hasAttribute('data-myludo-observer')) {
+                gameList.setAttribute('data-myludo-observer', 'true');
+                let debounce: ReturnType<typeof setTimeout> | undefined;
+                new MutationObserver(() => {
+                    clearTimeout(debounce);
+                    debounce = setTimeout(() => fetchAndFeedStatsPage(page), 250);
+                }).observe(gameList, { childList: true, subtree: true });
+            }
+        }
+
+        function updateGameStatsStatuses() {
+            const links = document.querySelectorAll<HTMLAnchorElement>(`#gamelist_inner a.${myLudoEltId}[data-myludo-table-id]`);
+            const tableIds = Array.from(links, link => link.dataset.myludoTableId!);
+
+            gameStatsService.showStatuses(tableIds, statuses => registrationStatusDisplayHelper.apply(statuses));
         }
 
         function fetchAndFeedStatsPage(_page: number) {
@@ -192,13 +212,16 @@ export default defineContentScript({
                         cell.appendChild(link);
 
                         const targetRow = document.querySelector(`#gamelist_inner a[href="/table?table=${tableId}"]`)?.closest("tr");
-                        if (targetRow) {
+                        // une autre passe a pu traiter la ligne pendant l'attente
+                        if (targetRow && !targetRow.querySelector(`a.${myLudoEltId}`)) {
                             targetRow.appendChild(cell);
                         }
                     } catch (error) {
                         console.error("Error creating Myludo link:", error);
                     }
                 }
+
+                updateGameStatsStatuses();
 
                 clearTimeout(timeout);
             }, 125);

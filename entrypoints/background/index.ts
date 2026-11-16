@@ -3,16 +3,24 @@ import type { BackgroundRequest } from "~/core/messaging/sendToBackground";
 import boardGameArenaRepository from "~/core/repositories/boardGameArenaRepository";
 import notificationsService from "~/core/services/notificationsService";
 import getBgaFriends from "./messages/getBgaFriends";
+import getBgaGames from "./messages/getBgaGames";
 import getBgaTable from "./messages/getBgaTable";
 import getBgaUser from "./messages/getBgaUser";
+import getMyludoAccount from "./messages/getMyludoAccount";
+import getMyludoPlayDetails from "./messages/getMyludoPlayDetails";
+import getMyludoPlays from "./messages/getMyludoPlays";
 import getMyludoUser from "./messages/getMyludoUser";
 
 type Handler = (body: any) => Promise<unknown>;
 
 const handlers: Record<string, Handler> = {
     [BackgroundMessages.GET_BGA_FRIENDS]: () => getBgaFriends(),
+    [BackgroundMessages.GET_BGA_GAMES]: (body) => getBgaGames(body.query),
     [BackgroundMessages.GET_BGA_TABLE]: (body) => getBgaTable(body.tableId),
     [BackgroundMessages.GET_BGA_USER]: () => getBgaUser(),
+    [BackgroundMessages.GET_MYLUDO_ACCOUNT]: () => getMyludoAccount(),
+    [BackgroundMessages.GET_MYLUDO_PLAYS]: (body) => getMyludoPlays(body.myludoGameId, body.dateFrom, body.dateTo),
+    [BackgroundMessages.GET_MYLUDO_PLAY_DETAILS]: (body) => getMyludoPlayDetails(body.playId),
     [BackgroundMessages.GET_MYLUDO_USER]: () => getMyludoUser()
 };
 

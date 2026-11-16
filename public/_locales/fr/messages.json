@@ -280,5 +280,8 @@
     },
     "linkErrorText": {
         "message": "Erreur"
+    },
+    "registeredOnMyludoText": {
+        "message": "✓ Enregistrée sur Myludo"
     }
 }

@@ -1,4 +1,5 @@
 import type { BoardResponse } from "~/core/models/boardGameArena/BoardResponse";
+import type { GetGamesResponse, Table as GetGamesTable } from "~/core/models/boardGameArena/getGamesResponse";
 import type { TableInfos } from "~/core/models/boardGameArena/tableInfosResponse";
 import type { WhoResponse } from "~/core/models/boardGameArena/whoResponse";
 import { PlayerNotification } from "~/core/models/playerNotification";
@@ -81,6 +82,25 @@ export default class boardGameArenaRepository {
             .then(response => { return response as TableInfos })
             .catch((error) => {
                 console.error('Failed to fetch table information:', error);
+                return null;
+            });
+    }
+
+    /** Tables de « Statistiques de jeu » (`getGames`), pour les paramètres de requête donnés ; null en cas d'erreur. */
+    static async getGames(query: string): Promise<GetGamesTable[] | null> {
+        const headers = await boardGameArenaRepository.getHeaders();
+
+        if (!headers) return null;
+
+        return fetch(`https://boardgamearena.com/gamestats/gamestats/getGames.html?${query}`, { headers })
+            .then(response => { return response.json() })
+            .then(response => { return response as GetGamesResponse })
+            .then(response => {
+                const tables = response?.data?.tables;
+                return Array.isArray(tables) ? tables : null;
+            })
+            .catch((error) => {
+                console.error('Failed to fetch BGA game stats:', error);
                 return null;
             });
     }

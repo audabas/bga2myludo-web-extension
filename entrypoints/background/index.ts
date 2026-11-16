@@ -2,6 +2,7 @@ import { BackgroundMessages } from "~/core/models/backgroundMessages";
 import type { BackgroundRequest } from "~/core/messaging/sendToBackground";
 import boardGameArenaRepository from "~/core/repositories/boardGameArenaRepository";
 import notificationsService from "~/core/services/notificationsService";
+import getBgaBoard from "./messages/getBgaBoard";
 import getBgaFriends from "./messages/getBgaFriends";
 import getBgaGames from "./messages/getBgaGames";
 import getBgaTable from "./messages/getBgaTable";
@@ -14,6 +15,7 @@ import getMyludoUser from "./messages/getMyludoUser";
 type Handler = (body: any) => Promise<unknown>;
 
 const handlers: Record<string, Handler> = {
+    [BackgroundMessages.GET_BGA_BOARD]: (body) => getBgaBoard(body.query),
     [BackgroundMessages.GET_BGA_FRIENDS]: () => getBgaFriends(),
     [BackgroundMessages.GET_BGA_GAMES]: (body) => getBgaGames(body.query),
     [BackgroundMessages.GET_BGA_TABLE]: (body) => getBgaTable(body.tableId),

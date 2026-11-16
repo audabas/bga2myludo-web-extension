@@ -7,4 +7,5 @@ export class BackgroundMessages {
     static readonly GET_MYLUDO_ACCOUNT = 'GetMyludoAccount';
     static readonly GET_MYLUDO_PLAYS = 'GetMyludoPlays';
     static readonly GET_MYLUDO_PLAY_DETAILS = 'GetMyludoPlayDetails';
+    static readonly GET_BGA_BOARD = 'GetBgaBoard';
 };

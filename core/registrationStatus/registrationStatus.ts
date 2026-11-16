@@ -1,3 +1,4 @@
+import { RegistrationStatusCache } from "./cache";
 import { candidateWindow, localEndDay } from "./localDay";
 import { findMatchingPlay } from "./matching";
 import type {
@@ -64,6 +65,8 @@ function groupByGameAndDay(pending: PendingTable[]): PendingTable[][] {
 }
 
 export function createRegistrationStatus(deps: RegistrationStatusDependencies): RegistrationStatusModule {
+    const cache = new RegistrationStatusCache(deps.storage, deps.clock);
+
     function resolveGames(tables: RegistrationTable[], configuration: RegistrationStatusConfiguration, statuses: RegistrationStatuses): PendingTable[] {
         const pending: PendingTable[] = [];
 
@@ -105,8 +108,9 @@ export function createRegistrationStatus(deps: RegistrationStatusDependencies): 
     }
 
     return {
-        async getStatuses(tables: RegistrationTable[], _options: GetStatusesOptions = {}): Promise<RegistrationStatuses> {
+        async getStatuses(tables: RegistrationTable[], options: GetStatusesOptions = {}): Promise<RegistrationStatuses> {
             const statuses: RegistrationStatuses = new Map();
+            const useCache = options.useCache !== false;
 
             if (tables.length === 0) return statuses;
 
@@ -116,24 +120,36 @@ export function createRegistrationStatus(deps: RegistrationStatusDependencies): 
             const pending = resolveGames(tables, configuration, statuses);
             if (pending.length === 0) return statuses;
 
+            // le compte est nécessaire même si tout est en cache : une entrée d'un autre compte est ignorée
             const account = await safely(() => deps.myludo.getAccount());
-            const problem = accountProblem(account);
-            if (problem) {
-                pending.forEach(({ table }) => statuses.set(table.tableId, undetermined(problem)));
+            if (account?.status !== "connected") {
+                const reason = accountProblem(account) ?? "error";
+                pending.forEach(({ table }) => statuses.set(table.tableId, undetermined(reason)));
                 return statuses;
             }
 
-            // séquentiel, pour ne pas solliciter Myludo en rafale
-            for (const group of groupByGameAndDay(pending)) {
+            const context = (item: PendingTable) => ({ myludoAccountId: account.id, myludoGameId: item.myludoGameId });
+            const cached = useCache
+                ? await cache.read(pending.map(item => ({ tableId: item.table.tableId, context: context(item) })))
+                : new Map<string, RegistrationStatus>();
+            cached.forEach((status, tableId) => statuses.set(tableId, status));
+
+            // seules les Tables absentes du cache ou expirées sont recalculées, séquentiellement pour ne pas solliciter Myludo en rafale
+            const missing = pending.filter(({ table }) => !cached.has(table.tableId));
+            for (const group of groupByGameAndDay(missing)) {
                 await computeGroup(group, configuration, statuses);
+            }
+
+            // le mode « sans cache » n'écrit pas non plus : il ne doit pas masquer une invalidation en cours
+            if (useCache) {
+                await cache.write(missing.map(item => ({ tableId: item.table.tableId, status: statuses.get(item.table.tableId)!, context: context(item) })));
             }
 
             return statuses;
         },
 
-        // Pas encore de cache (ticket 08) : rien à invalider ni à vider.
-        async invalidate(_tableId: string): Promise<void> { },
+        invalidate: (tableId: string) => cache.invalidate(tableId),
 
-        async clearCache(): Promise<void> { }
+        clearCache: () => cache.clear()
     };
 }

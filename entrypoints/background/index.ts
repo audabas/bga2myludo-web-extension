@@ -15,6 +15,7 @@ import getBgaTable from "./messages/getBgaTable";
 import getBgaUser from "./messages/getBgaUser";
 import getMyludoAccount from "./messages/getMyludoAccount";
 import getMyludoPlayDetails from "./messages/getMyludoPlayDetails";
+import getMyludoPlayedGames from "./messages/getMyludoPlayedGames";
 import getMyludoPlays from "./messages/getMyludoPlays";
 import getMyludoUser from "./messages/getMyludoUser";
 
@@ -30,6 +31,7 @@ const handlers: Record<string, Handler> = {
     [BackgroundMessages.GET_MYLUDO_ACCOUNT]: () => getMyludoAccount(),
     [BackgroundMessages.GET_MYLUDO_PLAYS]: (body) => getMyludoPlays(body.myludoGameId, body.dateFrom, body.dateTo),
     [BackgroundMessages.GET_MYLUDO_PLAY_DETAILS]: (body) => getMyludoPlayDetails(body.playId),
+    [BackgroundMessages.GET_MYLUDO_PLAYED_GAMES]: () => getMyludoPlayedGames(),
     [BackgroundMessages.GET_MYLUDO_USER]: () => getMyludoUser()
 };
 

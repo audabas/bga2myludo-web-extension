@@ -107,6 +107,11 @@ export interface MyludoAccess {
     /** Parties Myludo de la fiche `myludoGameId` (id numérique) entre deux jours inclus (AAAA-MM-JJ), toutes pages confondues. */
     getPlays(myludoGameId: string, dateFrom: string, dateTo: string): Promise<MyludoPlay[] | null>;
     getPlayDetails(playId: string): Promise<MyludoPlayDetails | null>;
+    /**
+     * Ids numériques des fiches de jeu avec au moins une Partie Myludo, sur toute la période (liste des jeux joués) ;
+     * null si la liste est illisible ou incomplète.
+     */
+    getPlayedGames(): Promise<string[] | null>;
 }
 
 export interface Clock {
@@ -138,8 +143,17 @@ export interface RegistrationStatusDependencies {
 export interface RegistrationStatusModule {
     /** Statut d'enregistrement de chaque Table (les Tables doivent être celles auxquelles l'utilisateur a participé). */
     getStatuses(tables: RegistrationTable[], options?: GetStatusesOptions): Promise<RegistrationStatuses>;
+    /**
+     * Ouvre le contexte d'une Analyse de l'Enregistrement groupé, partagé par tous ses calculs (une page BGA chacun) :
+     * compte Myludo lu une fois, liste des jeux joués lue une fois (une fiche absente n'a aucune Partie Myludo), une seule
+     * requête par fiche jouée sur toute la période, et chaque détail lu une fois.
+     */
+    openAnalysis(): RegistrationStatusAnalysis;
     /** Invalide le statut d'une Table (recalculé à la prochaine demande). */
     invalidate(tableId: string): Promise<void>;
     /** Vide complètement le cache. */
     clearCache(): Promise<void>;
 }
+
+/** Contexte d'une Analyse : mêmes statuts et même cache que `getStatuses`, avec moins de requêtes Myludo. */
+export type RegistrationStatusAnalysis = Pick<RegistrationStatusModule, "getStatuses">;

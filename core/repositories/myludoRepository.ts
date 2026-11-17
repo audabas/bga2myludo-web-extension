@@ -1,4 +1,4 @@
-import type { LoginInitResponse, PlayDetailsResponse, PlayItem, PlaysResponse } from "~/core/models/myludo/playsResponse";
+import type { LoginInitResponse, PlayDetailsResponse, PlayedGamesResponse, PlayItem, PlaysResponse } from "~/core/models/myludo/playsResponse";
 import type { MyludoAccount, MyludoPlay, MyludoPlayDetails } from "~/core/registrationStatus/types";
 import { MyludoRateLimiter } from "./myludoRateLimiter";
 
@@ -7,6 +7,8 @@ const MYLUDO_URL = "https://www.myludo.fr/";
 const CSRF_TOKEN_TTL = 10 * 60 * 1000;
 // garde-fou contre une pagination incohérente
 const MAX_PLAYS_PAGES = 50;
+// garde-fou de la liste des jeux joués : 18 jeux par page, soit 1800 jeux
+const MAX_PLAYED_GAMES_PAGES = 100;
 
 let csrfToken: { value: string; fetchedAt: number } | null = null;
 
@@ -203,6 +205,60 @@ export default class myludoRepository {
         }
 
         return plays;
+    }
+
+    /**
+     * Ids numériques des fiches de jeu avec au moins une Partie Myludo, sur toute la période, toutes pages lues.
+     * null si la liste est illisible ou incomplète (nombre de jeux lus différent de `count`) : elle ne doit jamais
+     * faire croire qu'une fiche n'a aucune Partie Myludo.
+     */
+    static async getPlayedGames(): Promise<string[] | null> {
+        const ids: string[] = [];
+        let count: number | undefined;
+
+        for (let page = 1; page <= MAX_PLAYED_GAMES_PAGES; page++) {
+            const response = await myludoRepository.getJson<PlayedGamesResponse>("views/plays/datas.php", {
+                type: "games",
+                page: String(page),
+                // bornes vides : toute la période
+                datefrom: "",
+                dateto: "",
+                order: "bydatedesc"
+            });
+
+            if (!response || typeof response !== "object" || !isCount(response.count)) {
+                console.error("Unexpected Myludo played games response");
+                return null;
+            }
+            count = Number(response.count);
+
+            // au-delà de la dernière page, la liste est un objet vide
+            const list = response.list;
+            const items = Array.isArray(list) ? list : list && typeof list === "object" && Object.keys(list).length === 0 ? [] : null;
+            if (!items) {
+                console.error("Unexpected Myludo played games list");
+                return null;
+            }
+
+            for (const item of items) {
+                const id = item?.id;
+                if ((typeof id !== "number" && typeof id !== "string") || !/^\d+$/.test(String(id))) {
+                    console.error("Unexpected Myludo played game format");
+                    return null;
+                }
+                ids.push(String(id));
+            }
+
+            if (ids.length >= count || items.length === 0) break;
+        }
+
+        // une liste plus courte (page vide trop tôt, plafond de pages) ou plus longue que `count` est incomplète
+        if (count === undefined || ids.length !== count) {
+            console.error("Myludo played games count mismatch");
+            return null;
+        }
+
+        return ids;
     }
 
     /** Détail d'une Partie Myludo (commentaire en texte complet). */

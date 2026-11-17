@@ -28,7 +28,8 @@ const registrationStatusModule = createRegistrationStatus({
     myludo: {
         getAccount: () => myludoService.getAccount(),
         getPlays: (myludoGameId, dateFrom, dateTo) => myludoService.getPlays(myludoGameId, dateFrom, dateTo),
-        getPlayDetails: (playId) => myludoService.getPlayDetails(playId)
+        getPlayDetails: (playId) => myludoService.getPlayDetails(playId),
+        getPlayedGames: () => myludoService.getPlayedGames()
     },
     storage,
     clock: { now: () => new Date() },

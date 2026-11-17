@@ -32,6 +32,13 @@ export default class myludoService {
             .catch(() => null);
     }
 
+    /** Ids numériques des fiches de jeu avec au moins une Partie Myludo, sur toute la période ; null en cas d'erreur. */
+    static async getPlayedGames(): Promise<string[] | null> {
+        return sendToBackground<string[] | null>({ name: BackgroundMessages.GET_MYLUDO_PLAYED_GAMES })
+            .then(response => response?.message ?? null)
+            .catch(() => null);
+    }
+
     static async hasPermission() {
         return chrome.permissions
             .contains({ origins: ['https://www.myludo.fr/*'] })

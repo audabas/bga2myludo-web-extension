@@ -17,7 +17,7 @@ export interface BulkHistoryPage {
 export type BulkHistoryFeed = () => Promise<BulkHistoryPage | null>;
 
 /** Accès au module Statut d'enregistrement. */
-export type BulkRegistrationStatusAccess = Pick<RegistrationStatusModule, "getStatuses" | "invalidate">;
+export type BulkRegistrationStatusAccess = Pick<RegistrationStatusModule, "getStatuses" | "openAnalysis" | "invalidate">;
 
 /** Horloge : heure courante et pause (pause entre deux Tables, délai maximal d'un formulaire). */
 export interface BulkClock {

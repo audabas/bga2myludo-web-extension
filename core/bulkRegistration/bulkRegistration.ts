@@ -199,6 +199,8 @@ export function createBulkRegistration(deps: BulkRegistrationDependencies): Bulk
         // une Table déjà lue n'est comptée qu'une fois (curseur qui n'avance plus, liste décalée par une nouvelle partie)
         const seen = new Set<string>();
         const feed = deps.openFeed();
+        // compte Myludo, jeux joués, Parties Myludo et détails partagés par toutes les pages de l'Analyse
+        const registrationStatus = deps.statuses.openAnalysis();
         for (let pagesRead = 0; pagesRead < BULK_MAX_PAGES; pagesRead++) {
             if (signal.aborted) return stopped();
             const page = await abortHelper.until(feed(), signal);
@@ -210,7 +212,7 @@ export function createBulkRegistration(deps: BulkRegistrationDependencies): Bulk
 
             const tables = page.tables.filter(table => !seen.has(table.tableId) && seen.add(table.tableId));
             const statuses = tables.length > 0
-                ? await abortHelper.until(deps.statuses.getStatuses(tables, { signal }), signal)
+                ? await abortHelper.until(registrationStatus.getStatuses(tables, { signal }), signal)
                 : new Map<string, RegistrationStatus>();
             // une page dont tous les statuts n'ont pas été calculés n'est pas classée
             if (signal.aborted || !statuses) return stopped();

@@ -1,5 +1,6 @@
 import type { LoginInitResponse, PlayDetailsResponse, PlayItem, PlaysResponse } from "~/core/models/myludo/playsResponse";
 import type { MyludoAccount, MyludoPlay, MyludoPlayDetails } from "~/core/registrationStatus/types";
+import { MyludoRateLimiter } from "./myludoRateLimiter";
 
 const MYLUDO_URL = "https://www.myludo.fr/";
 // durée de réutilisation du jeton CSRF (évite de recharger la page d'accueil à chaque appel)
@@ -8,6 +9,14 @@ const CSRF_TOKEN_TTL = 10 * 60 * 1000;
 const MAX_PLAYS_PAGES = 50;
 
 let csrfToken: { value: string; fetchedAt: number } | null = null;
+
+// régulateur unique de toutes les requêtes Myludo de l'extension (script de fond) ; son état est perdu à l'arrêt du service worker
+const rateLimiter = new MyludoRateLimiter();
+
+/** `fetch` vers Myludo, soumis au régulateur de débit (file d'attente, nouveaux essais après un 429). */
+function fetchMyludo(url: string, init: RequestInit) {
+    return rateLimiter.schedule(() => fetch(url, init));
+}
 
 function isFlagSet(value: unknown) {
     return value === true || value === 1 || value === "1";
@@ -44,7 +53,8 @@ function toMyludoPlay(item: PlayItem): MyludoPlay | null {
 export default class myludoRepository {
     static async getHeaders() {
         //récupérer la home page pour récupérer le x-csrf-token dans les balises meta
-        return fetch("https://www.myludo.fr/", { method: "GET" })
+        // régulée aussi : rien ne dit que la page d'accueil échappe au quota, et elle n'est chargée qu'au plus toutes les 10 minutes ou après un 403
+        return fetchMyludo("https://www.myludo.fr/", { method: "GET" })
             .then(response => { return response.text() })
             .then(response => {
                 const regex = /<meta\s+name="csrf-token"\s+content="([^"]+)"/;
@@ -68,7 +78,7 @@ export default class myludoRepository {
 
         if (!headers) return null;
 
-        return fetch(`https://www.myludo.fr/views/login/datas.php?type=init`, { method: "GET", headers })
+        return fetchMyludo(`https://www.myludo.fr/views/login/datas.php?type=init`, { method: "GET", headers })
             .then(response => { return response.json(); })
             .then(response => { return response.user })
             .catch((error) => { 
@@ -94,7 +104,10 @@ export default class myludoRepository {
         ]);
     }
 
-    /** GET JSON sur un endpoint Myludo ; null en cas d'erreur. Un 403 (jeton expiré) est retenté une fois avec un nouveau jeton. */
+    /**
+     * GET JSON sur un endpoint Myludo, via le régulateur de débit ; null en cas d'erreur (dont un 429 après tous ses nouveaux essais).
+     * Un 403 (jeton expiré) est retenté une fois avec un nouveau jeton, en repassant par le régulateur.
+     */
     private static async getJson<T>(path: string, params: Record<string, string>): Promise<T | null> {
         const url = `${MYLUDO_URL}${path}?${new URLSearchParams(params).toString()}`;
 
@@ -104,7 +117,7 @@ export default class myludoRepository {
             if (!headers) return null;
 
             try {
-                const response = await fetch(url, { method: "GET", headers, credentials: "include" });
+                const response = await fetchMyludo(url, { method: "GET", headers, credentials: "include" });
 
                 if (response.status === 403 && !forceRefresh) continue;
                 if (!response.ok) {

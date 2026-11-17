@@ -37,7 +37,7 @@ export interface BulkRegistrationPanel {
 
 /**
  * Panneau de l'Enregistrement groupé des pages d'Historique BGA : bouton, analyse, confirmation dans la page,
- * enregistrement avec bouton Arrêter et suivi de la page affichée, puis récapitulatif.
+ * enregistrement, puis récapitulatif. L'analyse et l'enregistrement ont un bouton Arrêter et suivent la page affichée.
  */
 export function createBulkRegistrationPanel(pages: BulkRegistrationPanelPages): BulkRegistrationPanel {
     const pageConfigs: BulkRegistrationPageConfig[] = [
@@ -110,12 +110,26 @@ export function createBulkRegistrationPanel(pages: BulkRegistrationPanelPages): 
     }
 
     /**
+     * Surveille la page affichée toutes les 250 ms : la quitter, changer de filtre (ou de joueur) ou retirer le panneau
+     * appelle `onLeave`. BGA navigue en partie sans recharger la page. Renvoie la fin de la surveillance.
+     */
+    function watchPage(panel: HTMLElement, page: BulkRegistrationPageConfig, onLeave: () => void): () => void {
+        const key = page.pageKey();
+        const watcher = setInterval(() => {
+            if (!page.matches.test(window.location.href) || page.pageKey() !== key || !panel.isConnected) onLeave();
+        }, 250);
+        return () => clearInterval(watcher);
+    }
+
+    /**
      * Analyse de l'Enregistrement groupé : rien n'est écrit sur Myludo, le résultat s'affiche dans le panneau.
-     * Si l'analyse le permet, l'enregistrement est proposé, à confirmer dans la page.
+     * Bouton Arrêter et suivi de la page affichée, comme pour l'enregistrement : un arrêt n'affiche que « Analyse
+     * arrêtée ». Si l'analyse le permet, l'enregistrement est proposé, à confirmer dans la page.
      */
     async function analyse(panel: HTMLElement, module: BulkRegistrationModule, page: BulkRegistrationPageConfig) {
         bulkRegistrationDisplayHelper.setBusy(panel, true);
-        bulkRegistrationDisplayHelper.showAnalysing(panel, 0);
+        bulkRegistrationDisplayHelper.startAnalysing(panel, () => module.stop());
+        const stopWatching = watchPage(panel, page, () => module.stop());
         try {
             const analysis = await module.analyse(progress => bulkRegistrationDisplayHelper.showAnalysing(panel, progress.tablesRead));
             bulkRegistrationDisplayHelper.showAnalysis(panel, analysis, page.pageCapTextKey);
@@ -128,6 +142,7 @@ export function createBulkRegistrationPanel(pages: BulkRegistrationPanelPages): 
             console.error("Error analysing BGA history for Myludo bulk registration:", error);
             bulkRegistrationDisplayHelper.showError(panel);
         } finally {
+            stopWatching();
             bulkRegistrationDisplayHelper.setBusy(panel, false);
         }
     }
@@ -147,10 +162,7 @@ export function createBulkRegistrationPanel(pages: BulkRegistrationPanelPages): 
     ) {
         bulkRegistrationDisplayHelper.setBusy(panel, true);
         bulkRegistrationDisplayHelper.showStopButton(panel, () => module.stop());
-        const key = page.pageKey();
-        const pageWatcher = setInterval(() => {
-            if (!page.matches.test(window.location.href) || page.pageKey() !== key || !panel.isConnected) module.stop();
-        }, 250);
+        const stopWatching = watchPage(panel, page, () => module.stop());
         try {
             const recap = await module.register(analysis, progress => {
                 bulkRegistrationDisplayHelper.showProgress(panel, progress);
@@ -167,7 +179,7 @@ export function createBulkRegistrationPanel(pages: BulkRegistrationPanelPages): 
             console.error("Error during Myludo bulk registration:", error);
             bulkRegistrationDisplayHelper.showRegistrationError(panel);
         } finally {
-            clearInterval(pageWatcher);
+            stopWatching();
             bulkRegistrationDisplayHelper.setBusy(panel, false);
         }
     }

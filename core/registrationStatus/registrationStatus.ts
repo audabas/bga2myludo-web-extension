@@ -1,4 +1,5 @@
 import { RegistrationStatusCache } from "./cache";
+import abortHelper from "~/core/helpers/abortHelper";
 import timeHelper from "~/core/helpers/timeHelper";
 import { candidateWindow } from "./localDay";
 import { findMatchingPlay } from "./matching";
@@ -96,23 +97,29 @@ export function createRegistrationStatus(deps: RegistrationStatusDependencies): 
         return pending;
     }
 
-    /** Lecture du détail d'une Partie Myludo, au plus une fois par Partie Myludo et par calcul. */
-    function detailsReader(): DetailsReader {
+    /**
+     * Lecture du détail d'une Partie Myludo, au plus une fois par Partie Myludo et par calcul.
+     * Après une demande d'arrêt, plus aucun détail n'est demandé (null, comme un détail illisible).
+     */
+    function detailsReader(signal?: AbortSignal): DetailsReader {
         const details = new Map<string, Promise<MyludoPlayDetails | null>>();
-        return playId => {
+        return async playId => {
+            if (signal?.aborted) return null;
             let pending = details.get(playId);
             if (!pending) {
                 pending = safely(() => deps.myludo.getPlayDetails(playId));
                 details.set(playId, pending);
             }
-            return pending;
+            return (await abortHelper.until(pending, signal)) ?? null;
         };
     }
 
-    async function computeGroup(group: PendingTable[], configuration: RegistrationStatusConfiguration, getDetails: DetailsReader, statuses: RegistrationStatuses) {
+    /** Statuts d'un groupe (fiche de jeu, J). Après une demande d'arrêt, les Tables non traitées restent sans statut. */
+    async function computeGroup(group: PendingTable[], configuration: RegistrationStatusConfiguration, getDetails: DetailsReader, statuses: RegistrationStatuses, signal?: AbortSignal) {
         const { myludoGameId, day } = group[0]!;
         const { dateFrom, dateTo } = candidateWindow(day);
-        const plays: MyludoPlay[] | null = await safely(() => deps.myludo.getPlays(myludoGameId, dateFrom, dateTo));
+        const plays: MyludoPlay[] | null | undefined = await abortHelper.until(safely(() => deps.myludo.getPlays(myludoGameId, dateFrom, dateTo)), signal);
+        if (signal?.aborted) return;
 
         for (const { table } of group) {
             if (!plays) {
@@ -129,6 +136,9 @@ export function createRegistrationStatus(deps: RegistrationStatusDependencies): 
             const fallback = await findPlayByTableNumber(table, plays, getDetails);
             if (fallback.match) {
                 statuses.set(table.tableId, { kind: "registered" });
+            } else if (signal?.aborted) {
+                // des détails n'ont pas été lus : ni « non enregistrée », ni « indéterminée »
+                return;
             } else {
                 // un détail illisible ne doit pas donner un faux « non enregistrée »
                 statuses.set(table.tableId, fallback.detailsFailed ? undetermined("error") : { kind: "notRegistered" });
@@ -150,10 +160,13 @@ export function createRegistrationStatus(deps: RegistrationStatusDependencies): 
             const pending = resolveGames(tables, configuration, statuses);
             if (pending.length === 0) return statuses;
 
+            if (options.signal?.aborted) return statuses;
+
             // le compte est nécessaire même si tout est en cache : une entrée d'un autre compte est ignorée
-            const account = await safely(() => deps.myludo.getAccount());
+            const account = await abortHelper.until(safely(() => deps.myludo.getAccount()), options.signal);
+            if (options.signal?.aborted) return statuses;
             if (account?.status !== "connected") {
-                const reason = accountProblem(account) ?? "error";
+                const reason = accountProblem(account ?? null) ?? "error";
                 pending.forEach(({ table }) => statuses.set(table.tableId, undetermined(reason)));
                 return statuses;
             }
@@ -166,16 +179,19 @@ export function createRegistrationStatus(deps: RegistrationStatusDependencies): 
 
             // seules les Tables absentes du cache ou expirées sont recalculées, séquentiellement pour ne pas solliciter Myludo en rafale
             const missing = pending.filter(({ table }) => !cached.has(table.tableId));
-            const getDetails = detailsReader();
+            const getDetails = detailsReader(options.signal);
             for (const group of groupByGameAndDay(missing)) {
-                await computeGroup(group, configuration, getDetails, statuses);
+                if (options.signal?.aborted) break;
+                await computeGroup(group, configuration, getDetails, statuses, options.signal);
             }
 
+            // après une demande d'arrêt, seules les Tables calculées ont un statut
+            const computed = missing.filter(({ table }) => statuses.has(table.tableId));
             // le mode « sans cache » n'écrit pas non plus : il ne doit pas masquer une invalidation en cours,
             // sauf, sur demande, une Table trouvée enregistrée (formulaire validé : il n'y a plus rien à revérifier)
             const toWrite = useCache
-                ? missing
-                : options.cacheRegistered ? missing.filter(({ table }) => statuses.get(table.tableId)?.kind === "registered") : [];
+                ? computed
+                : options.cacheRegistered ? computed.filter(({ table }) => statuses.get(table.tableId)?.kind === "registered") : [];
             await cache.write(toWrite.map(item => ({ tableId: item.table.tableId, status: statuses.get(item.table.tableId)!, context: context(item) })));
 
             return statuses;

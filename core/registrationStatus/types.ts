@@ -54,6 +54,11 @@ export interface GetStatusesOptions {
      * groupé, une fois le formulaire validé). Les autres statuts ne le sont pas : une invalidation en cours reste.
      */
     cacheRegistered?: boolean;
+    /**
+     * Demande d'arrêt (Analyse de l'Enregistrement groupé) : vérifiée avant chaque appel Myludo, et un appel en cours
+     * n'est plus attendu. Les statuts déjà calculés sont renvoyés et mis en cache ; les Tables non traitées n'ont pas de statut.
+     */
+    signal?: AbortSignal;
 }
 
 // ---------------------------------------------------------------------------

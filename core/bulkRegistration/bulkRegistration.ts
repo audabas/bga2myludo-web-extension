@@ -1,5 +1,7 @@
+import abortHelper from "~/core/helpers/abortHelper";
 import type { MyludoAccountIssue, RegistrationStatus, RegistrationTable } from "~/core/registrationStatus/types";
 import type {
+    AnalysisProgress,
     BulkAnalysis,
     BulkFormDriver,
     BulkRecap,
@@ -88,11 +90,14 @@ export function bulkRegistrationAvailability(
 
 /**
  * L'analyse permet-elle de proposer l'enregistrement ? Il faut des Tables à enregistrer, un fil lu sans erreur BGA
- * (sinon l'analyse est incomplète : on invite à la relancer) et un compte Myludo utilisable (sinon on invite à s'y
- * connecter). Un fil coupé au plafond de pages n'empêche pas l'enregistrement : la page le signale.
+ * ni arrêt (sinon l'analyse est incomplète : on invite à la relancer) et un compte Myludo utilisable (sinon on invite
+ * à s'y connecter). Un fil coupé au plafond de pages n'empêche pas l'enregistrement : la page le signale.
  */
 export function isReadyToRegister(analysis: BulkAnalysis): boolean {
-    return analysis.toRegister.length > 0 && analysis.feedEnd !== "error" && !analysis.myludoAccountIssue;
+    return analysis.toRegister.length > 0
+        && analysis.feedEnd !== "error"
+        && analysis.feedEnd !== "stopped"
+        && !analysis.myludoAccountIssue;
 }
 
 /**
@@ -102,39 +107,17 @@ export function isReadyToRegister(analysis: BulkAnalysis): boolean {
  */
 export function createBulkRegistration(deps: BulkRegistrationDependencies): BulkRegistrationModule {
     let currentRun: Run | undefined;
+    let currentAnalysis: AbortController | undefined;
 
     return {
         async analyse(onProgress) {
-            const analysis: BulkAnalysis = {
-                toRegister: [],
-                discarded: { undetermined: [], abandoned: [], gameUnavailable: [] },
-                alreadyRegistered: [],
-                tablesRead: 0,
-                feedEnd: "complete"
-            };
-
-            // une Table déjà lue n'est comptée qu'une fois (curseur qui n'avance plus, liste décalée par une nouvelle partie)
-            const seen = new Set<string>();
-            const feed = deps.openFeed();
-            for (let pagesRead = 0; pagesRead < BULK_MAX_PAGES; pagesRead++) {
-                const page = await feed();
-                if (!page) {
-                    analysis.feedEnd = "error";
-                    return analysis;
-                }
-
-                const tables = page.tables.filter(table => !seen.has(table.tableId) && seen.add(table.tableId));
-                const statuses = tables.length > 0 ? await deps.statuses.getStatuses(tables) : new Map();
-                tables.forEach(table => classify(analysis, table, statuses.get(table.tableId)));
-                analysis.tablesRead += tables.length;
-                onProgress?.({ tablesRead: analysis.tablesRead });
-
-                // compte Myludo inutilisable : aucune autre Table ne pourrait être vérifiée, inutile de lire la suite
-                if (page.isLast || analysis.myludoAccountIssue) return analysis;
+            const controller = new AbortController();
+            currentAnalysis = controller;
+            try {
+                return await analyseUntilStopped(controller.signal, onProgress);
+            } finally {
+                if (currentAnalysis === controller) currentAnalysis = undefined;
             }
-
-            analysis.feedEnd = "pageCap";
-            return analysis;
         },
 
         async register(analysis, onProgress) {
@@ -191,9 +174,57 @@ export function createBulkRegistration(deps: BulkRegistrationDependencies): Bulk
         },
 
         stop() {
+            currentAnalysis?.abort();
             currentRun?.requestStop("requested");
         }
     };
+
+    /**
+     * Analyse jusqu'à la fin du fil, ou jusqu'à une demande d'arrêt, qui n'attend pas l'appel BGA ou Myludo en cours.
+     * Une Analyse arrêtée garde les pages déjà classées (`tablesRead`), mais n'est pas prête à enregistrer.
+     */
+    async function analyseUntilStopped(signal: AbortSignal, onProgress?: (progress: AnalysisProgress) => void): Promise<BulkAnalysis> {
+        const analysis: BulkAnalysis = {
+            toRegister: [],
+            discarded: { undetermined: [], abandoned: [], gameUnavailable: [] },
+            alreadyRegistered: [],
+            tablesRead: 0,
+            feedEnd: "complete"
+        };
+        const stopped = () => {
+            analysis.feedEnd = "stopped";
+            return analysis;
+        };
+
+        // une Table déjà lue n'est comptée qu'une fois (curseur qui n'avance plus, liste décalée par une nouvelle partie)
+        const seen = new Set<string>();
+        const feed = deps.openFeed();
+        for (let pagesRead = 0; pagesRead < BULK_MAX_PAGES; pagesRead++) {
+            if (signal.aborted) return stopped();
+            const page = await abortHelper.until(feed(), signal);
+            if (signal.aborted) return stopped();
+            if (!page) {
+                analysis.feedEnd = "error";
+                return analysis;
+            }
+
+            const tables = page.tables.filter(table => !seen.has(table.tableId) && seen.add(table.tableId));
+            const statuses = tables.length > 0
+                ? await abortHelper.until(deps.statuses.getStatuses(tables, { signal }), signal)
+                : new Map<string, RegistrationStatus>();
+            // une page dont tous les statuts n'ont pas été calculés n'est pas classée
+            if (signal.aborted || !statuses) return stopped();
+            tables.forEach(table => classify(analysis, table, statuses.get(table.tableId)));
+            analysis.tablesRead += tables.length;
+            onProgress?.({ tablesRead: analysis.tablesRead });
+
+            // compte Myludo inutilisable : aucune autre Table ne pourrait être vérifiée, inutile de lire la suite
+            if (page.isLast || analysis.myludoAccountIssue) return analysis;
+        }
+
+        analysis.feedEnd = "pageCap";
+        return analysis;
+    }
 
     function createRun(): Run {
         let onStop = () => {};

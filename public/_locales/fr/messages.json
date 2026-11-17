@@ -323,6 +323,9 @@
     "bulkRegistrationAnalysingText": {
         "message": "Analyse de l'Historique BGA en cours, rien n'est enregistré sur Myludo. Tables lues : #COUNT#"
     },
+    "bulkRegistrationAnalysisStoppedText": {
+        "message": "Analyse arrêtée, rien n'a été enregistré sur Myludo. Tables lues : #COUNT#"
+    },
     "bulkRegistrationAnalysisText": {
         "message": "À enregistrer : #TO_REGISTER# · Écartées : #DISCARDED# · Déjà enregistrées : #REGISTERED#"
     },

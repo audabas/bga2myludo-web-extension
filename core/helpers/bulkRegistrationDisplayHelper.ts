@@ -120,8 +120,15 @@ export default class bulkRegistrationDisplayHelper {
         if (button) bulkRegistrationDisplayHelper.setDisabled(button, busy);
     }
 
-    static showAnalysing(panel: HTMLElement, tablesRead: number) {
+    /** Début de l'Analyse : le résultat d'un lancement précédent est effacé, et le bouton Arrêter affiché. */
+    static startAnalysing(panel: HTMLElement, onStop: () => void) {
         bulkRegistrationDisplayHelper.clearExtras(panel);
+        bulkRegistrationDisplayHelper.showAnalysing(panel, 0);
+        bulkRegistrationDisplayHelper.showStopButton(panel, onStop);
+    }
+
+    /** Progression de l'Analyse (le bouton Arrêter reste affiché). */
+    static showAnalysing(panel: HTMLElement, tablesRead: number) {
         bulkRegistrationDisplayHelper.showText(panel, message("bulkRegistrationAnalysingText", { COUNT: tablesRead }));
     }
 
@@ -137,12 +144,18 @@ export default class bulkRegistrationDisplayHelper {
 
     /**
      * Résultat de l'analyse ; `pageCapTextKey` est le libellé du plafond atteint, propre à la page (filtres ou non).
-     * Une analyse interrompue (compte Myludo inutilisable, erreur BGA) n'affiche que l'invitation à se connecter
-     * ou à relancer l'analyse : ses décomptes, partiels, ne veulent rien dire.
+     * Une analyse interrompue (compte Myludo inutilisable, erreur BGA, arrêt) n'affiche que l'invitation à se connecter,
+     * à relancer l'analyse, ou l'arrêt : ses décomptes, partiels, ne veulent rien dire.
      */
     static showAnalysis(panel: HTMLElement, analysis: BulkAnalysis, pageCapTextKey: string) {
+        // le bouton Arrêter de l'Analyse disparaît
+        panel.querySelector(`.${ACTIONS_CLASS}`)?.replaceChildren();
         if (analysis.myludoAccountIssue) {
             bulkRegistrationDisplayHelper.showText(panel, message(ACCOUNT_ISSUE_LABELS[analysis.myludoAccountIssue]));
+            return;
+        }
+        if (analysis.feedEnd === "stopped") {
+            bulkRegistrationDisplayHelper.showText(panel, message("bulkRegistrationAnalysisStoppedText", { COUNT: analysis.tablesRead }));
             return;
         }
         if (analysis.feedEnd === "error") {
@@ -161,6 +174,7 @@ export default class bulkRegistrationDisplayHelper {
     }
 
     static showError(panel: HTMLElement) {
+        panel.querySelector(`.${ACTIONS_CLASS}`)?.replaceChildren();
         bulkRegistrationDisplayHelper.showText(panel, message("bulkRegistrationAnalysisErrorText"));
     }
 
@@ -202,8 +216,8 @@ export default class bulkRegistrationDisplayHelper {
     }
 
     /**
-     * Bouton Arrêter, pendant l'enregistrement : `onStop` est appelé une fois ; la Table en cours est alors vérifiée
-     * une dernière fois avant l'arrêt, le bouton l'indique en attendant le récapitulatif.
+     * Bouton Arrêter, pendant l'Analyse ou l'enregistrement : `onStop` est appelé une fois ; le bouton indique l'arrêt
+     * en cours en attendant le résultat (pendant l'enregistrement, la Table en cours est vérifiée une dernière fois).
      */
     static showStopButton(panel: HTMLElement, onStop: () => void) {
         const actions = panel.querySelector(`.${ACTIONS_CLASS}`);

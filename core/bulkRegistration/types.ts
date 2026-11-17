@@ -77,8 +77,11 @@ export type BulkRegistrationAvailability =
 /** Raisons pour lesquelles une Table est écartée de l'Enregistrement groupé. */
 export type DiscardReason = "undetermined" | "abandoned" | "gameUnavailable";
 
-/** Fin de la lecture du fil : jusqu'au bout, arrêtée au plafond de pages, ou interrompue par une erreur BGA. */
-export type FeedEnd = "complete" | "pageCap" | "error";
+/**
+ * Fin de la lecture du fil : jusqu'au bout, arrêtée au plafond de pages, interrompue par une erreur BGA, ou Analyse
+ * arrêtée (bouton Arrêter, page BGA quittée, panneau retiré).
+ */
+export type FeedEnd = "complete" | "pageCap" | "error" | "stopped";
 
 /** Avancement de l'analyse. */
 export interface AnalysisProgress {
@@ -146,7 +149,7 @@ export interface BulkRecap {
 export interface BulkRegistrationModule {
     /**
      * Lit tout le fil de l'Historique BGA (sous le plafond de pages), calcule les Statuts d'enregistrement et classe
-     * les Tables. S'arrête plus tôt sur une erreur BGA ou un compte Myludo inutilisable.
+     * les Tables. S'arrête plus tôt sur une erreur BGA, un compte Myludo inutilisable ou une demande d'arrêt.
      */
     analyse(onProgress?: (progress: AnalysisProgress) => void): Promise<BulkAnalysis>;
     /**
@@ -155,8 +158,10 @@ export interface BulkRegistrationModule {
      */
     register(analysis: BulkAnalysis, onProgress?: (progress: RegistrationProgress) => void): Promise<BulkRecap>;
     /**
-     * Demande l'arrêt du parcours d'enregistrement en cours (sans effet s'il n'y en a pas) : la Table en cours est
-     * vérifiée une dernière fois, et compte comme enregistrée ou en échec, puis le parcours s'arrête.
+     * Demande l'arrêt de l'Analyse ou du parcours d'enregistrement en cours (sans effet s'il n'y en a pas).
+     * - Analyse : elle s'arrête sans attendre l'appel BGA ou Myludo en cours ; elle n'est pas prête à enregistrer.
+     * - Enregistrement : la Table en cours est vérifiée une dernière fois, et compte comme enregistrée ou en échec,
+     *   puis le parcours s'arrête.
      */
     stop(): void;
 }

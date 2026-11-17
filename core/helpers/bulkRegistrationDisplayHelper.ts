@@ -278,6 +278,21 @@ export default class bulkRegistrationDisplayHelper {
         details.replaceChildren(title, list);
     }
 
+    /** Bouton « Continuer en ignorant les échecs », sous le récapitulatif d'un arrêt sur des échecs consécutifs. */
+    static showContinueButton(panel: HTMLElement, onContinue: () => void) {
+        const actions = panel.querySelector(`.${ACTIONS_CLASS}`);
+        if (!actions) return;
+
+        const button = bulkRegistrationDisplayHelper.createActionButton("bulkRegistrationContinueIgnoringFailuresButtonText", "bgabutton_blue");
+        button.addEventListener("click", event => {
+            event.preventDefault();
+            actions.replaceChildren();
+            onContinue();
+        });
+
+        actions.replaceChildren(button);
+    }
+
     static showRegistrationError(panel: HTMLElement) {
         panel.querySelector(`.${ACTIONS_CLASS}`)?.replaceChildren();
         bulkRegistrationDisplayHelper.showText(panel, message("bulkRegistrationRegistrationErrorText"));

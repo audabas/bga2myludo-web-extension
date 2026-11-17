@@ -393,7 +393,10 @@
         "message": "Enregistrement arrêté : l'extension n'a plus accès à myludo.fr. Autorisez-la depuis sa fenêtre, puis relancez l'analyse."
     },
     "bulkRegistrationStopConsecutiveFailuresText": {
-        "message": "Enregistrement arrêté après #COUNT# échecs consécutifs : Myludo ne répond peut-être plus, ou son formulaire a changé. Réessayez plus tard."
+        "message": "Enregistrement arrêté après #COUNT# échecs consécutifs : Myludo ne répond peut-être plus, son formulaire a changé, ou ces Tables ressemblent à une partie déjà saisie. Réessayez plus tard, ou continuez en ignorant les échecs."
+    },
+    "bulkRegistrationContinueIgnoringFailuresButtonText": {
+        "message": "Continuer en ignorant les échecs"
     },
     "bulkRegistrationRemainingText": {
         "message": "Tables non traitées : #COUNT#. Relancez l'analyse pour les enregistrer."

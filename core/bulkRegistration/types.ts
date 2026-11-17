@@ -130,6 +130,15 @@ export interface RegistrationProgress {
  */
 export type StopReason = "requested" | "windowClosed" | "consecutiveFailures" | MyludoAccountIssue;
 
+/** Options d'un parcours d'enregistrement. */
+export interface RegisterOptions {
+    /**
+     * Ne pas s'arrêter après plusieurs échecs consécutifs : l'utilisateur préfère aller au bout, quitte à laisser
+     * quelques Tables en échec (formulaire bloqué par une partie similaire, par exemple). Les autres arrêts s'appliquent.
+     */
+    ignoreFailures?: boolean;
+}
+
 /** Récapitulatif final d'un parcours d'enregistrement. */
 export interface BulkRecap {
     /** numéros des Tables enregistrées pendant le parcours */
@@ -156,7 +165,7 @@ export interface BulkRegistrationModule {
      * Enregistre les Tables à enregistrer de l'analyse, des plus récentes aux plus anciennes, une à la fois,
      * dans une fenêtre Myludo dédiée fermée à la fin.
      */
-    register(analysis: BulkAnalysis, onProgress?: (progress: RegistrationProgress) => void): Promise<BulkRecap>;
+    register(analysis: BulkAnalysis, onProgress?: (progress: RegistrationProgress) => void, options?: RegisterOptions): Promise<BulkRecap>;
     /**
      * Demande l'arrêt de l'Analyse ou du parcours d'enregistrement en cours (sans effet s'il n'y en a pas).
      * - Analyse : elle s'arrête sans attendre l'appel BGA ou Myludo en cours ; elle n'est pas prête à enregistrer.

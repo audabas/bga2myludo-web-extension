@@ -1,5 +1,5 @@
-import { isReadyToRegister } from "~/core/bulkRegistration/bulkRegistration";
-import type { BulkAnalysis, BulkRegistrationModule } from "~/core/bulkRegistration/types";
+import { canContinueIgnoringFailures, isReadyToRegister, mergeRecaps, remainingAnalysis } from "~/core/bulkRegistration/bulkRegistration";
+import type { BulkAnalysis, BulkRecap, BulkRegistrationModule } from "~/core/bulkRegistration/types";
 import boardGameArenaHelper from "~/core/helpers/boardGameArenaHelper";
 import bulkRegistrationDisplayHelper from "~/core/helpers/bulkRegistrationDisplayHelper";
 import registrationStatusDisplayHelper from "~/core/helpers/registrationStatusDisplayHelper";
@@ -153,28 +153,37 @@ export function createBulkRegistrationPanel(pages: BulkRegistrationPanelPages): 
      * Quitter la page vaut demande d'arrêt : un rechargement ou la fermeture de l'onglet coupe la connexion durable
      * (le script de fond ferme alors la fenêtre Myludo), et une navigation sans rechargement est repérée ici.
      * Si BGA retire le panneau de la page, le parcours s'arrête aussi : il ne continue jamais sans affichage.
+     * Après un arrêt sur des échecs consécutifs, l'utilisateur peut continuer les Tables restantes en ignorant les échecs :
+     * le récapitulatif additionne alors les deux parcours (`previous`).
      */
     async function register(
         panel: HTMLElement,
         module: BulkRegistrationModule,
         analysis: BulkAnalysis,
-        page: BulkRegistrationPageConfig
+        page: BulkRegistrationPageConfig,
+        previous?: BulkRecap
     ) {
         bulkRegistrationDisplayHelper.setBusy(panel, true);
         bulkRegistrationDisplayHelper.showStopButton(panel, () => module.stop());
         const stopWatching = watchPage(panel, page, () => module.stop());
         try {
-            const recap = await module.register(analysis, progress => {
+            const result = await module.register(analysis, progress => {
                 bulkRegistrationDisplayHelper.showProgress(panel, progress);
                 if (progress.outcome === "registered") {
                     registrationStatusDisplayHelper.apply(new Map([[progress.table.tableId, { kind: "registered" }]]));
                 }
-            });
+            }, { ignoreFailures: previous !== undefined });
+            const recap = previous ? mergeRecaps(previous, result) : result;
             const failedLinks = await Promise.all(recap.failed.map(async table => ({
                 tableId: table.tableId,
                 url: await boardGameArenaHelper.myludoFormUrl(table).catch(() => null)
             })));
             bulkRegistrationDisplayHelper.showRecap(panel, recap, failedLinks);
+            if (canContinueIgnoringFailures(recap)) {
+                bulkRegistrationDisplayHelper.showContinueButton(panel, () => {
+                    register(panel, module, remainingAnalysis(analysis, recap), page, recap);
+                });
+            }
         } catch (error) {
             console.error("Error during Myludo bulk registration:", error);
             bulkRegistrationDisplayHelper.showRegistrationError(panel);

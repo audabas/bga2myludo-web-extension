@@ -100,6 +100,26 @@ export function isReadyToRegister(analysis: BulkAnalysis): boolean {
         && !analysis.myludoAccountIssue;
 }
 
+/** Peut-on proposer de continuer en ignorant les échecs ? Le parcours s'est arrêté sur des échecs consécutifs, avant la fin. */
+export function canContinueIgnoringFailures(recap: BulkRecap): boolean {
+    return recap.stopReason === "consecutiveFailures" && recap.remaining.length > 0;
+}
+
+/** L'analyse réduite aux Tables qu'un parcours arrêté n'a pas traitées, dans le même ordre. */
+export function remainingAnalysis(analysis: BulkAnalysis, recap: BulkRecap): BulkAnalysis {
+    const remaining = new Set(recap.remaining);
+    return { ...analysis, toRegister: analysis.toRegister.filter(table => remaining.has(table.tableId)) };
+}
+
+/** Récapitulatif d'un parcours suivi de sa continuation : enregistrées et échecs s'additionnent, le reste vient de la suite. */
+export function mergeRecaps(previous: BulkRecap, next: BulkRecap): BulkRecap {
+    return {
+        ...next,
+        registered: [...previous.registered, ...next.registered],
+        failed: [...previous.failed, ...next.failed]
+    };
+}
+
 /**
  * Module Enregistrement groupé : enregistre sur Myludo toutes les Tables non enregistrées d'un Historique BGA.
  * Il ne connaît pas le DOM ; fil de l'Historique BGA, Statut d'enregistrement, horloge et pilote de formulaire sont injectés.
@@ -120,7 +140,7 @@ export function createBulkRegistration(deps: BulkRegistrationDependencies): Bulk
             }
         },
 
-        async register(analysis, onProgress) {
+        async register(analysis, onProgress, options = {}) {
             const recap: BulkRecap = {
                 registered: [],
                 failed: [],
@@ -159,7 +179,7 @@ export function createBulkRegistration(deps: BulkRegistrationDependencies): Bulk
                     }
 
                     // après la dernière Table, le parcours est de toute façon terminé
-                    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && index < total - 1) {
+                    if (!options.ignoreFailures && consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && index < total - 1) {
                         run.requestStop("consecutiveFailures");
                     }
                 }
